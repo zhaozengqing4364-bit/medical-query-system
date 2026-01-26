@@ -1,0 +1,8 @@
+{
+  "api_base_url": "https://api.kksj.org/v1",
+  "api_key": "sk-AeX2bltbBW6X60k1SZKxIvt5umHPeldJUixFnsTd0mR8QN8R",
+  "model": "gemini-3-flash-preview",
+  "embedding_api_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+  "embedding_api_key": "sk-2eaea4a587724f7f8c7676ab907c26b7",
+  "embedding_model": "text-embedding-v4"
+}

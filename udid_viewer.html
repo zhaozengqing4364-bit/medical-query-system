@@ -1,0 +1,1561 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UDID 医疗器械智能查询系统</title>
+    <meta name="description" content="基于AI的医疗器械唯一标识(UDID)智能查询与匹配系统">
+
+    <!-- Google Fonts: Poppins + Open Sans -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;500;600;700&family=Poppins:wght@400;500;600;700&display=swap"
+        rel="stylesheet">
+
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: { DEFAULT: '#0891B2', light: '#22D3EE', dark: '#0E7490' },
+                        accent: { DEFAULT: '#059669', light: '#10B981' },
+                        surface: { DEFAULT: '#F8FAFC', light: '#FFFFFF', dark: '#F1F5F9' },
+                        text: { DEFAULT: '#1E293B', muted: '#64748B', light: '#94A3B8' },
+                        border: { DEFAULT: '#E2E8F0', light: '#F1F5F9' }
+                    },
+                    fontFamily: {
+                        heading: ['Poppins', 'sans-serif'],
+                        body: ['Open Sans', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            font-family: 'Open Sans', sans-serif;
+        }
+
+        h1,
+        h2,
+        h3,
+        h4,
+        h5,
+        h6 {
+            font-family: 'Poppins', sans-serif;
+        }
+
+        /* Skeleton Loading */
+        .skeleton {
+            background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+            background-size: 200% 100%;
+            animation: skeleton 1.5s infinite;
+        }
+
+        @keyframes skeleton {
+            0% {
+                background-position: 200% 0;
+            }
+
+            100% {
+                background-position: -200% 0;
+            }
+        }
+
+        /* Table Row Hover */
+        .table-row-hover {
+            transition: all 0.15s ease-out;
+        }
+
+        .table-row-hover:hover {
+            background-color: #f0fdfa;
+        }
+
+        /* Description Truncate */
+        .line-clamp-2 {
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            line-clamp: 2;
+            overflow: hidden;
+        }
+
+        .line-clamp-3 {
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            line-clamp: 3;
+            overflow: hidden;
+        }
+
+        /* Tooltip */
+        .tooltip {
+            position: relative;
+        }
+
+        .tooltip-content {
+            visibility: hidden;
+            opacity: 0;
+            position: absolute;
+            z-index: 50;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 8px 12px;
+            background: #1e293b;
+            color: white;
+            font-size: 12px;
+            border-radius: 6px;
+            white-space: nowrap;
+            transition: all 0.2s ease-out;
+        }
+
+        .tooltip:hover .tooltip-content {
+            visibility: visible;
+            opacity: 1;
+        }
+
+        /* Modal */
+        .modal-overlay {
+            background: rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(4px);
+        }
+
+        /* Button Active State */
+        .btn-loading {
+            pointer-events: none;
+            opacity: 0.7;
+        }
+
+        /* Smooth Scroll */
+        html {
+            scroll-behavior: smooth;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+
+        /* Hover Card */
+        .hover-card {
+            position: fixed;
+            z-index: 100;
+            max-width: 400px;
+            min-width: 200px;
+            padding: 12px 16px;
+            background: #1e293b;
+            color: #f8fafc;
+            border-radius: 8px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.25);
+            font-size: 13px;
+            line-height: 1.6;
+            pointer-events: none;
+            opacity: 0;
+            transform: translateY(4px);
+            transition: opacity 0.15s ease-out, transform 0.15s ease-out;
+        }
+
+        .hover-card.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .hover-card-title {
+            font-size: 11px;
+            font-weight: 600;
+            color: #94a3b8;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .hover-card-content {
+            color: #f1f5f9;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .hover-card mark {
+            background: #fbbf24;
+            color: #1e293b;
+            padding: 0 2px;
+            border-radius: 2px;
+            font-weight: 600;
+        }
+
+        /* Truncate with hover trigger */
+        .truncate-hover {
+            cursor: help;
+        }
+
+        .truncate-hover:hover {
+            color: #0891b2;
+        }
+
+        /* Keyword highlight in table */
+        .keyword-highlight {
+            background: #fef3c7;
+            color: #92400e;
+            padding: 0 2px;
+            border-radius: 2px;
+            font-weight: 500;
+        }
+    </style>
+</head>
+
+<body class="bg-surface text-text min-h-screen">
+    <!-- Header -->
+    <header class="bg-white border-b border-border sticky top-0 z-40 shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <!-- Logo -->
+                <div class="flex items-center gap-3">
+                    <div
+                        class="w-10 h-10 bg-gradient-to-br from-primary to-primary-light rounded-xl flex items-center justify-center">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                    </div>
+                    <div>
+                        <h1 class="text-lg font-heading font-semibold text-text">UDID 智能查询</h1>
+                        <p class="text-xs text-text-muted">医疗器械唯一标识数据库</p>
+                    </div>
+                </div>
+
+                <!-- Stats Badge -->
+                <div class="hidden sm:flex items-center gap-4">
+                    <div class="flex items-center gap-2 px-3 py-1.5 bg-surface rounded-lg">
+                        <span class="text-xs text-text-muted">产品总数</span>
+                        <span id="statsTotalProducts" class="text-sm font-semibold text-primary">--</span>
+                    </div>
+                    <div class="flex items-center gap-2 px-3 py-1.5 bg-surface rounded-lg">
+                        <span class="text-xs text-text-muted">企业数量</span>
+                        <span id="statsManufacturers" class="text-sm font-semibold text-primary">--</span>
+                    </div>
+                </div>
+
+                <!-- User Info & Actions -->
+                <div class="flex items-center gap-3">
+                    <div id="userInfo" class="flex items-center gap-2 px-3 py-1.5 bg-primary/10 text-primary rounded-lg text-sm font-medium">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                        </svg>
+                        <span>加载中...</span>
+                    </div>
+                    <button onclick="goAdmin()"
+                        class="flex items-center gap-2 px-3 py-2 text-sm text-text-muted hover:text-primary hover:bg-primary/5 rounded-lg transition-colors cursor-pointer">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                        <span class="hidden md:inline">管理后台</span>
+                    </button>
+                    <button onclick="logout()"
+                        class="flex items-center gap-2 px-3 py-2 text-sm text-red-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                        </svg>
+                        <span class="hidden md:inline">退出</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <!-- Search & Filter Section -->
+        <section class="bg-white rounded-2xl shadow-sm border border-border p-6 mb-6">
+            <!-- Primary Search -->
+            <div class="flex flex-col lg:flex-row gap-4 mb-4">
+                <div class="flex-1 relative">
+                    <svg class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-text-light" fill="none"
+                        stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                    <input type="text" id="searchKeyword" placeholder="搜索产品名称、规格型号、企业名称..."
+                        class="w-full pl-12 pr-4 py-3 border border-border rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all text-sm"
+                        onkeyup="handleSearchKeyup(event)">
+                </div>
+                <button onclick="searchProducts()"
+                    class="flex items-center justify-center gap-2 px-6 py-3 bg-primary hover:bg-primary-dark text-white font-medium rounded-xl transition-colors cursor-pointer">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                    搜索
+                </button>
+            </div>
+
+            <!-- Filters Row 1 -->
+            <div class="flex flex-wrap gap-3 mb-3">
+                <select id="filterStatus"
+                    class="h-10 px-3 border border-border rounded-lg text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none cursor-pointer">
+                    <option value="">全部状态</option>
+                    <option value="新增">新增</option>
+                    <option value="更新">更新</option>
+                </select>
+                <select id="filterType"
+                    class="h-10 px-3 border border-border rounded-lg text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none cursor-pointer">
+                    <option value="">全部类型</option>
+                    <option value="耗材">耗材</option>
+                    <option value="设备">设备</option>
+                </select>
+                <select id="filterCategory"
+                    class="h-10 px-3 border border-border rounded-lg text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none cursor-pointer">
+                    <option value="">全部分类</option>
+                    <option value="01">01-无源手术器械</option>
+                    <option value="02">02-无源植入器械</option>
+                    <option value="03">03-注输护理器械</option>
+                    <option value="04">04-有源手术器械</option>
+                    <option value="05">05-医用成像器械</option>
+                    <option value="06">06-临床检验器械</option>
+                    <option value="07">07-口腔科器械</option>
+                    <option value="08">08-眼科器械</option>
+                    <option value="09">09-康复辅具</option>
+                    <option value="10">10-有源植入器械</option>
+                    <option value="13">13-骨科器械</option>
+                    <option value="14">14-医用材料</option>
+                    <option value="16">16-体外诊断器械</option>
+                    <option value="17">17-消毒灭菌器械</option>
+                    <option value="18">18-医疗设备</option>
+                    <option value="22">22-采血器械</option>
+                    <option value="68">68-体外诊断试剂</option>
+                </select>
+                <input type="text" id="filterManufacturer" placeholder="企业名称..."
+                    class="h-10 px-3 border border-border rounded-lg text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none w-40">
+            </div>
+
+            <!-- Filters Row 2 (New) -->
+            <div class="flex flex-wrap gap-3 mb-4">
+                <input type="text" id="filterCertNo" placeholder="注册证号 (国械注准...)"
+                    class="h-10 px-3 border border-border rounded-lg text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none w-48">
+                <input type="text" id="filterModel" placeholder="规格型号..."
+                    class="h-10 px-3 border border-border rounded-lg text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none w-40">
+                <input type="text" id="filterCommercialName" placeholder="商品名称..."
+                    class="h-10 px-3 border border-border rounded-lg text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none w-40">
+                <div class="flex items-center gap-2 text-sm text-text-muted">
+                    <span>发布日期:</span>
+                    <input type="date" id="filterDateFrom"
+                        class="h-10 px-3 border border-border rounded-lg text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none cursor-pointer">
+                    <span>至</span>
+                    <input type="date" id="filterDateTo"
+                        class="h-10 px-3 border border-border rounded-lg text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none cursor-pointer">
+                </div>
+                <button onclick="clearFilters()"
+                    class="h-10 px-4 text-sm text-text-muted hover:text-primary border border-border rounded-lg hover:border-primary transition-colors cursor-pointer">
+                    清除筛选
+                </button>
+            </div>
+
+            <!-- AI Match Section (Collapsible) -->
+            <div id="aiMatchSection" class="border-t border-border pt-4">
+                <div class="flex items-center justify-between mb-3">
+                    <div class="flex items-center gap-2">
+                        <div
+                            class="w-6 h-6 bg-gradient-to-br from-accent to-accent-light rounded-lg flex items-center justify-center">
+                            <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M13 10V3L4 14h7v7l9-11h-7z" />
+                            </svg>
+                        </div>
+                        <span class="font-heading font-medium text-sm">智能语义匹配</span>
+                        <span class="px-2 py-0.5 text-xs bg-accent/10 text-accent rounded-full">向量检索</span>
+                    </div>
+                </div>
+                <div class="flex flex-col gap-3">
+                    <div class="flex flex-col lg:flex-row gap-3">
+                        <div class="flex-1">
+                            <label class="block text-xs text-text-muted mb-1">采购项目名称 <span class="text-red-400">*</span></label>
+                            <input type="text" id="aiProductName" placeholder="如：注射用交联透明质酸钠凝胶"
+                                class="w-full px-4 py-2.5 border border-border rounded-xl focus:ring-2 focus:ring-accent/20 focus:border-accent outline-none transition-all text-sm">
+                        </div>
+                        <div class="flex-1">
+                            <label class="block text-xs text-text-muted mb-1">参数需求（规格/功能）</label>
+                            <input type="text" id="aiRequirement" placeholder="如：适用于面部真皮组织中层至深层注射 0.8ml/支"
+                                class="w-full px-4 py-2.5 border border-border rounded-xl focus:ring-2 focus:ring-accent/20 focus:border-accent outline-none transition-all text-sm">
+                        </div>
+                    </div>
+                    <div class="flex justify-end">
+                        <button id="btnAiMatch" onclick="smartMatch()"
+                            class="flex items-center justify-center gap-2 px-6 py-2.5 bg-accent hover:bg-accent-light text-white font-medium rounded-xl transition-colors cursor-pointer whitespace-nowrap">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                            </svg>
+                            智能匹配
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Results Section -->
+        <section class="bg-white rounded-2xl shadow-sm border border-border overflow-hidden">
+            <!-- Results Header -->
+            <div class="flex items-center justify-between px-6 py-4 border-b border-border bg-surface-light">
+                <div class="flex items-center gap-3">
+                    <h2 class="font-heading font-semibold text-lg">搜索结果</h2>
+                    <span id="resultCount" class="px-2 py-0.5 text-xs bg-primary/10 text-primary rounded-full">0
+                        条</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <label class="flex items-center gap-2 text-sm text-text-muted cursor-pointer mr-4 select-none">
+                        <input type="checkbox" id="mergeToggle"
+                            class="w-4 h-4 text-primary rounded border-border focus:ring-primary" checked
+                            onchange="toggleMergeMode()">
+                        <span>按企业合并</span>
+                    </label>
+                    <label class="flex items-center gap-2 text-sm text-text-muted cursor-pointer">
+                        <button onclick="goAdmin()"
+                            class="flex items-center gap-2 px-3 py-1.5 border border-border hover:border-primary hover:text-primary rounded-lg transition-colors cursor-pointer">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                            </svg>
+                            后台上传
+                        </button>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Table -->
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead class="bg-surface-dark text-left">
+                        <tr>
+                            <th class="px-4 py-3 text-xs font-medium text-text-muted uppercase tracking-wider">产品名称</th>
+                            <th class="px-4 py-3 text-xs font-medium text-text-muted uppercase tracking-wider">规格型号</th>
+                            <th class="px-4 py-3 text-xs font-medium text-text-muted uppercase tracking-wider">生产企业</th>
+                            <th class="px-4 py-3 text-xs font-medium text-text-muted uppercase tracking-wider w-48">适用范围</th>
+                            <th class="px-4 py-3 text-xs font-medium text-text-muted uppercase tracking-wider w-56">产品描述</th>
+                            <th class="px-4 py-3 text-xs font-medium text-text-muted uppercase tracking-wider">符合率</th>
+                            <th class="px-4 py-3 text-xs font-medium text-text-muted uppercase tracking-wider">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="resultsTable" class="divide-y divide-border">
+                        <!-- Results will be inserted here -->
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Skeleton Loading -->
+            <div id="loadingSkeleton" class="hidden p-6 space-y-4">
+                <div class="flex gap-4">
+                    <div class="skeleton h-10 flex-1 rounded-lg"></div>
+                </div>
+                <div class="flex gap-4">
+                    <div class="skeleton h-10 flex-1 rounded-lg"></div>
+                </div>
+                <div class="flex gap-4">
+                    <div class="skeleton h-10 flex-1 rounded-lg"></div>
+                </div>
+                <div class="flex gap-4">
+                    <div class="skeleton h-10 flex-1 rounded-lg"></div>
+                </div>
+            </div>
+
+            <!-- Empty State -->
+            <div id="emptyState" class="hidden py-16 text-center">
+                <svg class="w-16 h-16 mx-auto text-text-light mb-4" fill="none" stroke="currentColor"
+                    viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                        d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <p class="text-text-muted">暂无搜索结果</p>
+                <p class="text-sm text-text-light mt-1">尝试调整搜索条件或关键词</p>
+            </div>
+
+            <!-- Pagination -->
+            <div id="pagination"
+                class="hidden flex items-center justify-between px-6 py-4 border-t border-border bg-surface-light">
+                <span id="paginationInfo" class="text-sm text-text-muted">显示 1-50 条，共 100 条</span>
+                <div class="flex items-center gap-2">
+                    <button id="btnPrevPage" onclick="prevPage()"
+                        class="px-3 py-1.5 border border-border rounded-lg text-sm hover:bg-surface transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">上一页</button>
+                    <span id="pageNumber" class="px-3 py-1.5 text-sm">1</span>
+                    <button id="btnNextPage" onclick="nextPage()"
+                        class="px-3 py-1.5 border border-border rounded-lg text-sm hover:bg-surface transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">下一页</button>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="fixed inset-0 z-50 hidden">
+        <div class="modal-overlay absolute inset-0" onclick="hideSettingsModal()"></div>
+        <div
+            class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-lg bg-white rounded-2xl shadow-2xl p-6 max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between mb-6">
+                <h3 class="font-heading font-semibold text-lg">API 设置</h3>
+                <button onclick="hideSettingsModal()"
+                    class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface transition-colors cursor-pointer">
+                    <svg class="w-5 h-5 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            
+            <!-- AI 聊天模型配置 -->
+            <div class="mb-6">
+                <h4 class="text-sm font-semibold text-text mb-3 flex items-center gap-2">
+                    <span class="w-2 h-2 bg-primary rounded-full"></span>
+                    AI 评分模型（用于产品匹配评分）
+                </h4>
+                <div class="space-y-3 pl-4 border-l-2 border-primary/20">
+                    <div>
+                        <label class="block text-sm font-medium text-text-muted mb-1">API 地址</label>
+                        <input type="text" id="configApiUrl" placeholder="https://api.openai.com/v1"
+                            class="w-full px-4 py-2.5 border border-border rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-text-muted mb-1">API Key</label>
+                        <input type="password" id="configApiKey" placeholder="sk-..."
+                            class="w-full px-4 py-2.5 border border-border rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-text-muted mb-1">聊天模型</label>
+                        <input type="text" id="configModel" placeholder="gpt-4o-mini"
+                            class="w-full px-4 py-2.5 border border-border rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none text-sm">
+                        <p class="text-xs text-text-light mt-1">推荐: gpt-4o-mini, gpt-4o, claude-3-haiku, deepseek-chat</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Embedding 模型配置 -->
+            <div class="mb-6">
+                <h4 class="text-sm font-semibold text-text mb-3 flex items-center gap-2">
+                    <span class="w-2 h-2 bg-accent rounded-full"></span>
+                    向量模型（用于语义检索，可选）
+                </h4>
+                <div class="space-y-3 pl-4 border-l-2 border-accent/20">
+                    <div>
+                        <label class="block text-sm font-medium text-text-muted mb-1">Embedding API 地址</label>
+                        <input type="text" id="configEmbeddingApiUrl" placeholder="https://api.openai.com/v1 (留空则使用上方地址)"
+                            class="w-full px-4 py-2.5 border border-border rounded-xl focus:ring-2 focus:ring-accent/20 focus:border-accent outline-none text-sm">
+                        <p class="text-xs text-text-light mt-1">留空则使用 AI 评分模型的 API 地址</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-text-muted mb-1">Embedding API Key</label>
+                        <input type="password" id="configEmbeddingApiKey" placeholder="sk-... (留空则使用上方 Key)"
+                            class="w-full px-4 py-2.5 border border-border rounded-xl focus:ring-2 focus:ring-accent/20 focus:border-accent outline-none text-sm">
+                        <p class="text-xs text-text-light mt-1">留空则使用 AI 评分模型的 API Key</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-text-muted mb-1">Embedding 模型</label>
+                        <input type="text" id="configEmbeddingModel" placeholder="text-embedding-3-small"
+                            class="w-full px-4 py-2.5 border border-border rounded-xl focus:ring-2 focus:ring-accent/20 focus:border-accent outline-none text-sm">
+                        <p class="text-xs text-text-light mt-1">推荐: text-embedding-3-small, text-embedding-ada-002</p>
+                    </div>
+                    <div class="flex items-center justify-between p-3 bg-surface rounded-xl">
+                        <div>
+                            <p class="text-sm font-medium">向量索引状态</p>
+                            <p id="embeddingStats" class="text-xs text-text-muted">加载中...</p>
+                        </div>
+                        <div class="flex gap-2">
+                            <button onclick="testEmbeddingConnection()" id="btnTestEmbedding"
+                                class="px-3 py-1.5 border border-accent text-accent text-xs font-medium rounded-lg hover:bg-accent/5 transition-colors cursor-pointer">
+                                测试连接
+                            </button>
+                            <button onclick="buildEmbeddings()" id="btnBuildEmbedding"
+                                class="px-3 py-1.5 bg-accent hover:bg-accent-light text-white text-xs font-medium rounded-lg transition-colors cursor-pointer">
+                                构建索引
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="flex gap-3">
+                <button onclick="testAiConnection()"
+                    class="px-4 py-2.5 border border-primary text-primary rounded-xl text-sm font-medium hover:bg-primary/5 transition-colors cursor-pointer whitespace-nowrap">测试连接</button>
+                <button onclick="hideSettingsModal()"
+                    class="flex-1 px-4 py-2.5 border border-border rounded-xl text-sm font-medium hover:bg-surface transition-colors cursor-pointer">取消</button>
+                <button onclick="saveSettings()"
+                    class="flex-1 px-4 py-2.5 bg-primary hover:bg-primary-dark text-white rounded-xl text-sm font-medium transition-colors cursor-pointer">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sync Modal -->
+    <div id="syncModal" class="fixed inset-0 z-50 hidden">
+        <div class="modal-overlay absolute inset-0" onclick="hideSyncModal()"></div>
+        <div
+            class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md bg-white rounded-2xl shadow-2xl p-6">
+            <div class="flex items-center justify-between mb-6">
+                <h3 class="font-heading font-semibold text-lg">数据同步</h3>
+                <button onclick="hideSyncModal()"
+                    class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface transition-colors cursor-pointer">
+                    <svg class="w-5 h-5 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            <div id="syncContent" class="text-center py-8">
+                <p class="text-text-muted mb-4">从国家药监局官网同步最新的医疗器械数据</p>
+                <button onclick="triggerSync()" id="btnSync"
+                    class="px-6 py-3 bg-primary hover:bg-primary-dark text-white rounded-xl font-medium transition-colors cursor-pointer">
+                    开始同步
+                </button>
+            </div>
+            <div id="syncProgress" class="hidden text-center py-8">
+                <svg class="w-12 h-12 mx-auto text-primary animate-spin" fill="none" stroke="currentColor"
+                    viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                <p class="text-text-muted mt-4">正在同步数据，请稍候...</p>
+            </div>
+            <div id="syncResult" class="hidden text-center py-8">
+                <svg class="w-12 h-12 mx-auto text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                </svg>
+                <p id="syncResultText" class="text-text mt-4 font-medium">同步完成</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hover Card (for scope/description preview) -->
+    <div id="hoverCard" class="hover-card">
+        <div class="hover-card-title"></div>
+        <div class="hover-card-content"></div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-6 right-6 z-50 hidden">
+        <div class="flex items-center gap-3 px-4 py-3 bg-text text-white rounded-xl shadow-lg">
+            <span id="toastMessage">操作成功</span>
+        </div>
+    </div>
+
+    <!-- JavaScript -->
+    <script>
+        // ==========================================
+        // 配置
+        // ==========================================
+        const API_BASE = 'http://localhost:8080/api';
+        let currentPage = 1;
+        let totalResults = 0;
+        const PAGE_SIZE = 50;
+        let currentRawProducts = []; // Store raw data for client-side filtering
+        let isMergeEnabled = true;   // Default to merged view
+
+        // ==========================================
+        // 初始化
+        // ==========================================
+        document.addEventListener('DOMContentLoaded', () => {
+            checkAuth();
+            loadStats();
+            loadConfig();
+            // 加载最新 50 条数据（快速模式）
+            loadLatestProducts();
+        });
+
+        // ==========================================
+        // 认证检查
+        // ==========================================
+        async function checkAuth() {
+            try {
+                const res = await fetch(`${API_BASE}/auth/me`, { credentials: 'include' });
+                const data = await res.json();
+                if (data.success && data.data) {
+                    const userEl = document.getElementById('userInfo');
+                    const role = data.data.role === 'admin' ? '管理员' : '用户';
+                    userEl.innerHTML = `
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                        </svg>
+                        <span>${data.data.username}</span>
+                        <span class="text-xs opacity-70">(${role})</span>
+                    `;
+                } else {
+                    // 未登录，跳转到登录页
+                    window.location.href = '/login';
+                }
+            } catch (e) {
+                console.error('Auth check failed:', e);
+                window.location.href = '/login';
+            }
+        }
+
+        async function logout() {
+            try {
+                await fetch(`${API_BASE}/auth/logout`, { method: 'POST', credentials: 'include' });
+            } catch (e) {
+                console.error('Logout error:', e);
+            }
+            window.location.href = '/login';
+        }
+
+        async function loadLatestProducts() {
+            showLoading();
+            try {
+                // 快速加载最新数据（无筛选条件，使用缓存总数）
+                const res = await fetch(`${API_BASE}/search?page_size=50`);
+                const data = await res.json();
+                if (data.success) {
+                    totalResults = data.total;
+                    currentRawProducts = data.data || [];
+                    updateView();
+                    updatePagination(data.total, 1);
+                }
+            } catch (e) {
+                console.error('加载失败:', e);
+                showEmpty();
+            }
+            hideLoading();
+        }
+
+        // ==========================================
+        // API 调用
+        // ==========================================
+        async function loadStats() {
+            try {
+                const res = await fetch(`${API_BASE}/stats`);
+                const data = await res.json();
+                if (data.success) {
+                    document.getElementById('statsTotalProducts').textContent = data.data.total_products.toLocaleString();
+                    document.getElementById('statsManufacturers').textContent = data.data.manufacturers_count.toLocaleString();
+                }
+            } catch (e) {
+                console.error('Failed to load stats:', e);
+            }
+        }
+
+        let currentMatchMode = 'vector'; // 统一使用向量检索
+
+        async function smartMatch() {
+            const productName = document.getElementById('aiProductName').value.trim();
+            const requirement = document.getElementById('aiRequirement').value.trim();
+            
+            if (!productName) {
+                showToast('请输入采购项目名称');
+                document.getElementById('aiProductName').focus();
+                return;
+            }
+
+            const btn = document.getElementById('btnAiMatch');
+            btn.classList.add('btn-loading');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<svg class="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> 匹配中...';
+
+            showLoading();
+
+            try {
+                // 获取当前筛选条件
+                const filters = {
+                    keyword: document.getElementById('searchKeyword').value,
+                    category_code: document.getElementById('filterCategory').value,
+                    manufacturer: document.getElementById('filterManufacturer').value
+                };
+
+                // 两阶段检索：产品名称过滤 + 参数需求排序
+                const res = await fetch(`${API_BASE}/ai-match`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        product_name: productName,  // 产品名称（用于第一阶段过滤）
+                        requirement: requirement,    // 参数需求（用于向量排序）
+                        filters, 
+                        use_vector: true 
+                    })
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    currentRawProducts = data.data || [];
+                    updateView();
+                    const matchCount = data.data ? data.data.length : 0;
+                    showToast(`匹配完成，找到 ${matchCount} 个不同厂家的产品`);
+                    document.getElementById('resultCount').textContent = `${matchCount} 条`;
+                } else {
+                    showToast(data.error || '匹配失败');
+                }
+            } catch (e) {
+                console.error(e);
+                showToast('请求失败，请检查网络或后端服务');
+            }
+
+            hideLoading();
+            btn.classList.remove('btn-loading');
+            btn.innerHTML = originalText;
+        }
+
+        async function searchProducts() {
+            showLoading();
+
+            const params = new URLSearchParams({
+                keyword: document.getElementById('searchKeyword').value,
+                status: document.getElementById('filterStatus').value,
+                type: document.getElementById('filterType').value,
+                category_code: document.getElementById('filterCategory').value,
+                manufacturer: document.getElementById('filterManufacturer').value,
+                // 新增筛选参数
+                cert_no: document.getElementById('filterCertNo').value,
+                model: document.getElementById('filterModel').value,
+                commercial_name: document.getElementById('filterCommercialName').value,
+                date_from: document.getElementById('filterDateFrom').value,
+                date_to: document.getElementById('filterDateTo').value,
+                page: currentPage,
+                page_size: PAGE_SIZE
+            });
+
+            try {
+                const res = await fetch(`${API_BASE}/search?${params}`);
+                const data = await res.json();
+
+                if (data.success) {
+                    totalResults = data.total;
+                    currentRawProducts = data.data || [];
+                    updateView();
+                    updatePagination(data.total, data.page);
+                }
+            } catch (e) {
+                console.error('Search failed:', e);
+                showEmpty();
+            }
+
+            hideLoading();
+        }
+
+        function clearFilters() {
+            document.getElementById('searchKeyword').value = '';
+            document.getElementById('filterStatus').value = '';
+            document.getElementById('filterType').value = '';
+            document.getElementById('filterCategory').value = '';
+            document.getElementById('filterManufacturer').value = '';
+            document.getElementById('filterCertNo').value = '';
+            document.getElementById('filterModel').value = '';
+            document.getElementById('filterCommercialName').value = '';
+            document.getElementById('filterDateFrom').value = '';
+            document.getElementById('filterDateTo').value = '';
+            currentPage = 1;
+            loadLatestProducts();
+            showToast('已清除筛选条件');
+            showToast('已清除筛选条件');
+        }
+
+        // ==========================================
+        // 前端去重逻辑
+        // ==========================================
+        function toggleMergeMode() {
+            isMergeEnabled = document.getElementById('mergeToggle').checked;
+            updateView();
+        }
+
+        function updateView() {
+            if (!currentRawProducts) return;
+
+            let displayProducts = [...currentRawProducts];
+
+            if (isMergeEnabled) {
+                const seen = new Set();
+                const unique = [];
+                for (const p of displayProducts) {
+                    const mfr = (p.manufacturer || '').trim();
+                    if (!mfr || !seen.has(mfr)) {
+                        unique.push(p);
+                        if (mfr) seen.add(mfr);
+                    }
+                }
+                displayProducts = unique;
+            }
+
+            renderResults(displayProducts);
+            document.getElementById('resultCount').textContent = `${displayProducts.length} 条`;
+        }
+
+        // ==========================================
+        // 渲染结果
+        // ==========================================
+        
+        // 全局变量存储当前高亮关键词
+        let currentHighlightKeywords = [];
+        
+        function renderResults(products) {
+            const tbody = document.getElementById('resultsTable');
+
+            if (!products || products.length === 0) {
+                showEmpty();
+                return;
+            }
+
+            hideEmpty();
+            document.getElementById('resultCount').textContent = `${totalResults.toLocaleString()} 条`;
+            
+            // 提取第一个产品的高亮关键词（所有产品共享）
+            currentHighlightKeywords = products[0]?.highlightKeywords || [];
+
+            tbody.innerHTML = products.map((p, idx) => {
+                const scopeText = p.scope || '';
+                const descText = p.description || '';
+                const truncatedScope = truncateText(scopeText, 60);
+                const truncatedDesc = truncateText(descText, 80);
+                const scopeNeedsHover = scopeText.length > 60;
+                const descNeedsHover = descText.length > 80;
+                
+                return `
+                <tr class="table-row-hover">
+                    <td class="px-4 py-3">
+                        <div class="font-medium text-text text-sm">${highlightKeywords(escapeHtml(p.product_name) || '-')}</div>
+                        <div class="text-xs text-text-light mt-0.5">${escapeHtml(p.di_code) || ''}</div>
+                    </td>
+                    <td class="px-4 py-3 text-sm text-text-muted">${highlightKeywords(escapeHtml(p.model) || '-')}</td>
+                    <td class="px-4 py-3">
+                        <div class="text-sm text-text">${escapeHtml(p.manufacturer) || '-'}</div>
+                        <div class="flex gap-1 mt-1 flex-wrap">
+                            <div class="relative inline-block">
+                                <button onmouseenter="showSpecsPopup(this, '${escapeHtml(p.manufacturer)}', '${escapeHtml(p.product_name)}')" 
+                                        onmouseleave="hideSpecsPopup()"
+                                        class="px-1.5 py-0.5 text-xs bg-primary/10 hover:bg-primary/20 text-primary rounded transition-colors cursor-pointer">
+                                    更多规格
+                                </button>
+                            </div>
+                            <button onclick="openExternalLink('baidu', '${escapeHtml(p.manufacturer)}')" class="px-1.5 py-0.5 text-xs bg-surface hover:bg-primary/10 text-text-muted hover:text-primary rounded transition-colors cursor-pointer" title="百度搜索">百度</button>
+                            <button onclick="openExternalLink('tianyancha', '${escapeHtml(p.manufacturer)}')" class="px-1.5 py-0.5 text-xs bg-surface hover:bg-primary/10 text-text-muted hover:text-primary rounded transition-colors cursor-pointer" title="天眼查">天眼查</button>
+                        </div>
+                    </td>
+                    <td class="px-4 py-3 max-w-[200px]">
+                        <p class="text-sm text-text-muted ${scopeNeedsHover ? 'truncate-hover' : ''}"
+                           ${scopeNeedsHover ? `onmouseenter="showHoverCard(event, '适用范围', '${escapeAttr(scopeText)}')" onmouseleave="hideHoverCard()"` : ''}>
+                            ${highlightKeywords(escapeHtml(truncatedScope)) || '<span class="text-text-light">-</span>'}
+                        </p>
+                    </td>
+                    <td class="px-4 py-3 max-w-[240px]">
+                        <p class="text-sm text-text-muted ${descNeedsHover ? 'truncate-hover' : ''}"
+                           ${descNeedsHover ? `onmouseenter="showHoverCard(event, '产品描述', '${escapeAttr(descText)}')" onmouseleave="hideHoverCard()"` : ''}>
+                            ${highlightKeywords(escapeHtml(truncatedDesc)) || '<span class="text-text-light">暂无描述</span>'}
+                        </p>
+                    </td>
+                    <td class="px-4 py-3">
+                        ${p.matchScore !== undefined ? `
+                            <div class="flex items-center gap-1">
+                                <span class="px-2 py-1 text-xs font-medium ${p.matchScore >= 70 ? 'bg-green-100 text-green-700' : p.matchScore >= 60 ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-600'} rounded-full">${p.matchScore}%</span>
+                                ${p.matchReason ? `
+                                    <div class="tooltip inline-block">
+                                        <svg class="w-4 h-4 text-text-light hover:text-primary cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                        <div class="tooltip-content">${escapeHtml(p.matchReason)}</div>
+                                    </div>
+                                ` : ''}
+                            </div>
+                        ` : '<span class="text-text-light">-</span>'}
+                    </td>
+                    <td class="px-4 py-3">
+                        <button onclick="copyToClipboard('${escapeHtml(p.di_code)}')" class="px-2 py-1 text-xs text-text-muted hover:text-primary hover:bg-primary/5 rounded transition-colors cursor-pointer">复制 DI</button>
+                    </td>
+                </tr>
+            `}).join('');
+        }
+        
+        // 文本截断
+        function truncateText(text, maxLength) {
+            if (!text) return '';
+            if (text.length <= maxLength) return text;
+            return text.substring(0, maxLength) + '...';
+        }
+        
+        // 关键词高亮
+        function highlightKeywords(text) {
+            if (!text || !currentHighlightKeywords || currentHighlightKeywords.length === 0) return text;
+            
+            let result = text;
+            currentHighlightKeywords.forEach(kw => {
+                if (kw && kw.length >= 2) {
+                    const regex = new RegExp(escapeRegExp(kw), 'gi');
+                    result = result.replace(regex, '<span class="keyword-highlight">$&</span>');
+                }
+            });
+            return result;
+        }
+        
+        // 正则转义
+        function escapeRegExp(string) {
+            return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        }
+        
+        // 属性转义（用于 HTML 属性）
+        function escapeAttr(text) {
+            if (!text) return '';
+            return text.replace(/'/g, "\\'").replace(/"/g, '\\"').replace(/\n/g, '\\n');
+        }
+        
+        // Hover Card 显示
+        let hoverCardTimeout = null;
+        
+        function showHoverCard(event, title, content) {
+            clearTimeout(hoverCardTimeout);
+            
+            hoverCardTimeout = setTimeout(() => {
+                const card = document.getElementById('hoverCard');
+                const titleEl = card.querySelector('.hover-card-title');
+                const contentEl = card.querySelector('.hover-card-content');
+                
+                titleEl.textContent = title;
+                
+                // 高亮关键词
+                let highlightedContent = escapeHtml(content.replace(/\\n/g, '\n').replace(/\\'/g, "'").replace(/\\"/g, '"'));
+                currentHighlightKeywords.forEach(kw => {
+                    if (kw && kw.length >= 2) {
+                        const regex = new RegExp(escapeRegExp(kw), 'gi');
+                        highlightedContent = highlightedContent.replace(regex, '<mark>$&</mark>');
+                    }
+                });
+                contentEl.innerHTML = highlightedContent;
+                
+                // 定位
+                const rect = event.target.getBoundingClientRect();
+                let left = rect.left;
+                let top = rect.bottom + 8;
+                
+                // 防止溢出右边
+                if (left + 400 > window.innerWidth) {
+                    left = window.innerWidth - 410;
+                }
+                // 防止溢出下边
+                if (top + 200 > window.innerHeight) {
+                    top = rect.top - 8 - 200;
+                }
+                
+                card.style.left = `${Math.max(10, left)}px`;
+                card.style.top = `${top}px`;
+                card.classList.add('visible');
+            }, 200);  // 200ms 延迟
+        }
+        
+        function hideHoverCard() {
+            clearTimeout(hoverCardTimeout);
+            const card = document.getElementById('hoverCard');
+            card.classList.remove('visible');
+        }
+
+        function toggleDescription(id) {
+            const el = document.getElementById(`desc-${id}`);
+            if (el.classList.contains('line-clamp-2')) {
+                el.classList.remove('line-clamp-2');
+            } else {
+                el.classList.add('line-clamp-2');
+            }
+        }
+
+        // ==========================================
+        // 分页
+        // ==========================================
+        function updatePagination(total, page) {
+            const pagination = document.getElementById('pagination');
+            if (total > PAGE_SIZE) {
+                pagination.classList.remove('hidden');
+                const start = (page - 1) * PAGE_SIZE + 1;
+                const end = Math.min(page * PAGE_SIZE, total);
+                document.getElementById('paginationInfo').textContent = `显示 ${start}-${end} 条，共 ${total} 条`;
+                document.getElementById('pageNumber').textContent = page;
+                document.getElementById('btnPrevPage').disabled = page <= 1;
+                document.getElementById('btnNextPage').disabled = page * PAGE_SIZE >= total;
+            } else {
+                pagination.classList.add('hidden');
+            }
+        }
+
+        function prevPage() {
+            if (currentPage > 1) {
+                currentPage--;
+                searchProducts();
+            }
+        }
+
+        function nextPage() {
+            if (currentPage * PAGE_SIZE < totalResults) {
+                currentPage++;
+                searchProducts();
+            }
+        }
+
+        function handleSearchKeyup(e) {
+            if (e.key === 'Enter') {
+                currentPage = 1;
+                searchProducts();
+            }
+        }
+
+        function goAdmin() {
+            window.location.href = '/login';
+        }
+
+        // ==========================================
+        // 上传 XML
+        // ==========================================
+        async function handleUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            showToast('正在上传...');
+
+            try {
+                const res = await fetch(`${API_BASE}/upload`, {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    showToast(data.message);
+                    loadStats();
+                    searchProducts();
+                } else {
+                    showToast('上传失败: ' + data.error);
+                }
+            } catch (e) {
+                showToast('上传失败');
+            }
+
+            event.target.value = '';
+        }
+
+        // ==========================================
+        // 同步
+        // ==========================================
+        function showSyncModal() {
+            document.getElementById('syncModal').classList.remove('hidden');
+            document.getElementById('syncContent').classList.remove('hidden');
+            document.getElementById('syncProgress').classList.add('hidden');
+            document.getElementById('syncResult').classList.add('hidden');
+        }
+
+        function hideSyncModal() {
+            document.getElementById('syncModal').classList.add('hidden');
+        }
+
+        async function triggerSync() {
+            document.getElementById('syncContent').classList.add('hidden');
+            document.getElementById('syncProgress').classList.remove('hidden');
+
+            try {
+                const res = await fetch(`${API_BASE}/sync`, { method: 'POST' });
+                const data = await res.json();
+
+                document.getElementById('syncProgress').classList.add('hidden');
+                document.getElementById('syncResult').classList.remove('hidden');
+                document.getElementById('syncResultText').textContent = data.message || '同步完成';
+
+                loadStats();
+                searchProducts();
+            } catch (e) {
+                document.getElementById('syncProgress').classList.add('hidden');
+                document.getElementById('syncResult').classList.remove('hidden');
+                document.getElementById('syncResultText').textContent = '同步失败，请重试';
+            }
+        }
+
+        // ==========================================
+        // AI 匹配
+        // ==========================================
+        async function aiMatch() {
+            const requirement = document.getElementById('aiRequirement').value;
+            if (!requirement.trim()) {
+                showToast('请输入需求描述');
+                return;
+            }
+
+            const btn = document.getElementById('btnAiMatch');
+            btn.classList.add('btn-loading');
+            btn.innerHTML = '<svg class="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> 匹配中...';
+
+            showLoading();
+
+            try {
+                // 获取当前筛选条件，传递给 AI 匹配
+                const filters = {
+                    keyword: document.getElementById('searchKeyword').value,
+                    category_code: document.getElementById('filterCategory').value,
+                    manufacturer: document.getElementById('filterManufacturer').value
+                };
+
+                const res = await fetch(`${API_BASE}/ai-match`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ requirement, filters })
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    renderResults(data.data);
+                    const matchCount = data.data ? data.data.length : 0;
+                    showToast(`AI 匹配完成，找到 ${matchCount} 条高匹配产品`);
+                    // 更新结果计数
+                    document.getElementById('resultCount').textContent = `${matchCount} 条 (AI匹配)`;
+                } else {
+                    showToast(data.error || 'AI 匹配失败');
+                    // 如果有降级数据，也显示
+                    if (data.data && data.data.length > 0) {
+                        renderResults(data.data);
+                    }
+                }
+            } catch (e) {
+                showToast('AI 匹配失败');
+            }
+
+            hideLoading();
+            btn.classList.remove('btn-loading');
+            btn.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg> AI 匹配';
+        }
+
+        // ==========================================
+        // 设置
+        // ==========================================
+        function showSettingsModal() {
+            document.getElementById('settingsModal').classList.remove('hidden');
+            loadEmbeddingStats();
+        }
+
+        function hideSettingsModal() {
+            document.getElementById('settingsModal').classList.add('hidden');
+        }
+
+        async function loadConfig() {
+            try {
+                const res = await fetch(`${API_BASE}/config`);
+                const data = await res.json();
+                if (data.success && data.data) {
+                    document.getElementById('configApiUrl').value = data.data.api_base_url || '';
+                    document.getElementById('configModel').value = data.data.model || 'gpt-4o-mini';
+                    document.getElementById('configEmbeddingApiUrl').value = data.data.embedding_api_url || '';
+                    document.getElementById('configEmbeddingApiKey').value = '';  // 不回显密码
+                    document.getElementById('configEmbeddingModel').value = data.data.embedding_model || 'text-embedding-3-small';
+                }
+            } catch (e) { }
+        }
+        
+        async function loadEmbeddingStats() {
+            try {
+                const res = await fetch(`${API_BASE}/embedding/stats`);
+                const data = await res.json();
+                if (data.success && data.data) {
+                    const stats = data.data;
+                    document.getElementById('embeddingStats').textContent = 
+                        `已索引 ${stats.total_embeddings} / ${stats.total_products} 个产品 (${stats.coverage})`;
+                }
+            } catch (e) {
+                document.getElementById('embeddingStats').textContent = '未构建索引';
+            }
+        }
+        
+        async function testEmbeddingConnection() {
+            const btn = document.getElementById('btnTestEmbedding');
+            const originalText = btn.innerText;
+            btn.innerText = '测试中...';
+            btn.disabled = true;
+            
+            try {
+                const res = await fetch(`${API_BASE}/embedding/test`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        embedding_api_url: document.getElementById('configEmbeddingApiUrl').value,
+                        embedding_api_key: document.getElementById('configEmbeddingApiKey').value,
+                        embedding_model: document.getElementById('configEmbeddingModel').value
+                    })
+                });
+                const data = await res.json();
+                
+                if (data.success) {
+                    showToast('Embedding 连接成功！');
+                    alert(data.message);
+                } else {
+                    showToast('连接失败');
+                    alert('错误: ' + (data.error || '未知错误'));
+                }
+            } catch (e) {
+                showToast('请求失败');
+                console.error(e);
+            }
+            
+            btn.innerText = originalText;
+            btn.disabled = false;
+        }
+        
+        async function buildEmbeddings() {
+            const btn = document.getElementById('btnBuildEmbedding');
+            const originalText = btn.innerText;
+            btn.innerText = '构建中...';
+            btn.disabled = true;
+            
+            try {
+                const res = await fetch(`${API_BASE}/embedding/build`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ force: false })
+                });
+                const data = await res.json();
+                
+                if (data.success) {
+                    showToast(data.message);
+                    loadEmbeddingStats();
+                } else {
+                    showToast('构建失败: ' + (data.error || '未知错误'));
+                }
+            } catch (e) {
+                showToast('构建失败');
+                console.error(e);
+            }
+            
+            btn.innerText = originalText;
+            btn.disabled = false;
+        }
+
+        async function testAiConnection() {
+            const config = {
+                api_base_url: document.getElementById('configApiUrl').value,
+                api_key: document.getElementById('configApiKey').value,
+                model: document.getElementById('configModel').value
+            };
+
+            if (!config.api_key) {
+                showToast('请填写 API Key');
+                return;
+            }
+
+            const btn = event.target;
+            const originalText = btn.innerText;
+            btn.innerText = '测试中...';
+            btn.disabled = true;
+
+            try {
+                const res = await fetch(`${API_BASE}/test-ai`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(config)
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    showToast('连接成功！');
+                    alert(data.message);
+                } else {
+                    showToast('连接失败');
+                    alert('错误: ' + (data.error || '未知错误'));
+                }
+            } catch (e) {
+                showToast('请求失败');
+                console.error(e);
+            }
+
+            btn.innerText = originalText;
+            btn.disabled = false;
+        }
+
+        async function saveSettings() {
+            const config = {
+                api_base_url: document.getElementById('configApiUrl').value,
+                api_key: document.getElementById('configApiKey').value,
+                model: document.getElementById('configModel').value,
+                embedding_api_url: document.getElementById('configEmbeddingApiUrl').value,
+                embedding_api_key: document.getElementById('configEmbeddingApiKey').value,
+                embedding_model: document.getElementById('configEmbeddingModel').value
+            };
+
+            try {
+                const res = await fetch(`${API_BASE}/config`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(config)
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    showToast('设置已保存');
+                    hideSettingsModal();
+                } else {
+                    showToast('保存失败');
+                }
+            } catch (e) {
+                showToast('保存失败');
+            }
+        }
+
+        // ==========================================
+        // 外部链接
+        // ==========================================
+        function openExternalLink(platform, name) {
+            const encodedName = encodeURIComponent(name);
+            const urls = {
+                baidu: `https://www.baidu.com/s?wd=${encodedName}`,
+                tianyancha: `https://www.tianyancha.com/search?key=${encodedName}`,
+                qichacha: `https://www.qcc.com/web/search?key=${encodedName}`,
+                qixinbao: `https://www.qixin.com/search?key=${encodedName}`,
+                aiqicha: `https://aiqicha.baidu.com/s?q=${encodedName}`
+            };
+            window.open(urls[platform], '_blank');
+        }
+
+        // 规格悬浮弹窗
+        let specsPopupTimer = null;
+        let specsCache = {}; // 缓存已加载的规格
+        
+        async function showSpecsPopup(btn, manufacturer, productName) {
+            // 清除隐藏定时器
+            if (specsPopupTimer) {
+                clearTimeout(specsPopupTimer);
+                specsPopupTimer = null;
+            }
+            
+            // 如果已有弹窗且是同一个按钮，不重复创建
+            const existingPopup = document.getElementById('specsPopup');
+            if (existingPopup && existingPopup.parentElement === btn.parentElement) {
+                return;
+            }
+            
+            // 移除已有弹窗
+            if (existingPopup) existingPopup.remove();
+            
+            // 创建弹窗
+            const popup = document.createElement('div');
+            popup.id = 'specsPopup';
+            popup.className = 'absolute z-50 bg-white border border-border rounded-lg shadow-lg p-3 min-w-48 max-w-80';
+            popup.style.left = '0';
+            popup.style.top = '100%';
+            popup.style.marginTop = '4px';
+            
+            // 缓存 key
+            const cacheKey = `${manufacturer}|${productName}`;
+            
+            // 检查缓存
+            if (specsCache[cacheKey]) {
+                renderSpecsPopup(popup, specsCache[cacheKey]);
+            } else {
+                popup.innerHTML = '<div class="text-xs text-text-muted">加载中...</div>';
+            }
+            
+            // 添加到按钮父元素
+            btn.parentElement.appendChild(popup);
+            
+            // 弹窗鼠标事件
+            popup.onmouseenter = () => {
+                if (specsPopupTimer) {
+                    clearTimeout(specsPopupTimer);
+                    specsPopupTimer = null;
+                }
+            };
+            popup.onmouseleave = () => startHideTimer();
+            
+            // 如果没有缓存，加载数据
+            if (!specsCache[cacheKey]) {
+                try {
+                    const res = await fetch(`${API_BASE}/product-specs?manufacturer=${encodeURIComponent(manufacturer)}&product_name=${encodeURIComponent(productName)}`);
+                    const data = await res.json();
+                    
+                    if (data.success) {
+                        specsCache[cacheKey] = data.data;
+                        // 检查弹窗是否还存在
+                        const currentPopup = document.getElementById('specsPopup');
+                        if (currentPopup) {
+                            renderSpecsPopup(currentPopup, data.data);
+                        }
+                    }
+                } catch (e) {
+                    const currentPopup = document.getElementById('specsPopup');
+                    if (currentPopup) {
+                        currentPopup.innerHTML = '<div class="text-xs text-red-500">加载失败</div>';
+                    }
+                }
+            }
+        }
+        
+        function renderSpecsPopup(popup, specs) {
+            if (specs.length > 0) {
+                popup.innerHTML = `
+                    <div class="text-xs font-medium text-text mb-2">已登记规格 (${specs.length}种)</div>
+                    <div class="max-h-48 overflow-y-auto space-y-1">
+                        ${specs.map(spec => `
+                            <div class="text-xs text-text-muted py-1 px-2 bg-surface rounded">${escapeHtml(spec)}</div>
+                        `).join('')}
+                    </div>
+                    <div class="text-xs text-text-light mt-2 pt-2 border-t border-border">仅显示已申请UDID的规格</div>
+                `;
+            } else {
+                popup.innerHTML = '<div class="text-xs text-text-muted">暂无其他规格</div>';
+            }
+        }
+        
+        function startHideTimer() {
+            if (specsPopupTimer) clearTimeout(specsPopupTimer);
+            specsPopupTimer = setTimeout(() => {
+                const popup = document.getElementById('specsPopup');
+                if (popup) popup.remove();
+            }, 300);
+        }
+        
+        function hideSpecsPopup() {
+            startHideTimer();
+        }
+
+        // ==========================================
+        // 工具函数
+        // ==========================================
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                showToast('已复制到剪贴板');
+            });
+        }
+
+        function showLoading() {
+            document.getElementById('loadingSkeleton').classList.remove('hidden');
+            document.getElementById('resultsTable').innerHTML = '';
+        }
+
+        function hideLoading() {
+            document.getElementById('loadingSkeleton').classList.add('hidden');
+        }
+
+        function showEmpty() {
+            document.getElementById('emptyState').classList.remove('hidden');
+            document.getElementById('pagination').classList.add('hidden');
+        }
+
+        function hideEmpty() {
+            document.getElementById('emptyState').classList.add('hidden');
+        }
+
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toastMessage').textContent = message;
+            toast.classList.remove('hidden');
+            setTimeout(() => toast.classList.add('hidden'), 3000);
+        }
+    </script>
+</body>
+
+</html>

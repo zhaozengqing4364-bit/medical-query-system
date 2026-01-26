@@ -1,0 +1,518 @@
+{
+  "batches": {
+    "0": {
+      "file_path": "data/embedding_batch/embedding_input_20260112_115620_batch0.jsonl",
+      "file_id": "file-batch-ecbd3539ac7045fd98fa965b",
+      "batch_id": "batch_5878ac56-d0cf-4262-bd0c-5181bd199ef5",
+      "status": "imported",
+      "output_file_id": "file-batch_output-36f5ac5df2ee4e8fad7c9a31",
+      "count": 50000,
+      "result_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_output_file-batch_output-36f5ac5df2ee4e8fad7c9a31.jsonl",
+      "imported_count": 50000
+    },
+    "1": {
+      "file_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_input_20260112_120306_batch1.jsonl",
+      "file_id": "file-batch-78282f6ae17941fdb70f74cb",
+      "batch_id": "batch_1e015d9b-1d48-4312-8d2b-ab1a91079ce4",
+      "status": "imported",
+      "output_file_id": "file-batch_output-512f82a59c094ffe952a73ac",
+      "count": 50000,
+      "result_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_output_file-batch_output-512f82a59c094ffe952a73ac.jsonl",
+      "imported_count": 50000
+    },
+    "2": {
+      "file_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_input_20260112_120309_batch2.jsonl",
+      "file_id": "file-batch-44c289791ce14331b8b282e1",
+      "batch_id": "batch_8852f4e2-ebe2-4c50-b0f8-91bde84e8ec0",
+      "status": "imported",
+      "output_file_id": "file-batch_output-10259c344a004926b3c77f58",
+      "count": 50000,
+      "result_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_output_file-batch_output-10259c344a004926b3c77f58.jsonl",
+      "imported_count": 50000
+    },
+    "3": {
+      "file_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_input_20260112_120309_batch3.jsonl",
+      "file_id": "file-batch-23a07c3ce0844f81bc0da844",
+      "batch_id": "batch_a8d29c0b-2c34-47ff-a61c-51b5b12bd083",
+      "status": "imported",
+      "output_file_id": "file-batch_output-abada81f693f41eabd06f4cf",
+      "count": 50000,
+      "result_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_output_file-batch_output-abada81f693f41eabd06f4cf.jsonl",
+      "imported_count": 50000
+    },
+    "4": {
+      "file_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_input_20260112_120310_batch4.jsonl",
+      "file_id": "file-batch-098e5b4cf24d4ed28cf66801",
+      "batch_id": "batch_1026d49e-cd0e-47cc-a563-f2e85e2a3bec",
+      "status": "imported",
+      "output_file_id": "file-batch_output-f5b3c8f6e464494a80bf8b20",
+      "count": 50000,
+      "result_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_output_file-batch_output-f5b3c8f6e464494a80bf8b20.jsonl",
+      "imported_count": 50000
+    },
+    "5": {
+      "file_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_input_20260112_120310_batch5.jsonl",
+      "file_id": "file-batch-8f8d76836234475aafca2738",
+      "batch_id": "batch_81baea3f-8b7e-43b4-b389-58450454d06b",
+      "status": "imported",
+      "output_file_id": "file-batch_output-69275d8fa4d04028a3cdea56",
+      "count": 50000,
+      "result_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_output_file-batch_output-69275d8fa4d04028a3cdea56.jsonl",
+      "imported_count": 50000
+    },
+    "6": {
+      "file_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_input_20260112_120312_batch6.jsonl",
+      "file_id": "file-batch-23ba5f2bfa4043bb8027e4f8",
+      "batch_id": "batch_d9b4e477-2409-4091-beb8-992d7a6457a9",
+      "status": "imported",
+      "output_file_id": "file-batch_output-5c6253e431ec4d4284f95ca3",
+      "count": 50000,
+      "result_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_output_file-batch_output-5c6253e431ec4d4284f95ca3.jsonl",
+      "imported_count": 50000
+    },
+    "7": {
+      "file_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_input_20260112_120315_batch7.jsonl",
+      "file_id": "file-batch-4b65d0814fbb4e81a57c5e49",
+      "batch_id": "batch_fdc242be-dc8b-4c42-9c36-a736edca3dcf",
+      "status": "imported",
+      "output_file_id": "file-batch_output-3e110be98fb64745a65dcbc1",
+      "count": 50000,
+      "result_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_output_file-batch_output-3e110be98fb64745a65dcbc1.jsonl",
+      "imported_count": 50000
+    },
+    "8": {
+      "file_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_input_20260112_120317_batch8.jsonl",
+      "file_id": "file-batch-0bd1e51c25d24809a5e7d7f4",
+      "batch_id": "batch_a0054763-3ac1-4cd2-817c-445359e1f625",
+      "status": "imported",
+      "output_file_id": "file-batch_output-6a81bfb770da4b95bf799e24",
+      "count": 50000,
+      "result_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_output_file-batch_output-6a81bfb770da4b95bf799e24.jsonl",
+      "imported_count": 50000
+    },
+    "9": {
+      "file_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_input_20260112_120320_batch9.jsonl",
+      "file_id": "file-batch-7295f8ea930f43039fd2b98c",
+      "batch_id": "batch_c2c5066e-d90f-42fe-a67e-35b9846fd901",
+      "status": "imported",
+      "output_file_id": "file-batch_output-ee6a8703003b430f8c8fe867",
+      "count": 50000,
+      "result_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_output_file-batch_output-ee6a8703003b430f8c8fe867.jsonl",
+      "imported_count": 50000
+    },
+    "10": {
+      "file_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_input_20260112_120322_batch10.jsonl",
+      "file_id": "file-batch-7f45ea4afe774bd4849546ea",
+      "batch_id": "batch_2f63381a-76a2-4e72-84b0-7583bf8a7bcb",
+      "status": "imported",
+      "output_file_id": "file-batch_output-117a63ef45d346229fde76cc",
+      "count": 50000,
+      "result_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_output_file-batch_output-117a63ef45d346229fde76cc.jsonl",
+      "imported_count": 50000
+    },
+    "11": {
+      "file_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_input_20260112_120326_batch11.jsonl",
+      "file_id": "file-batch-42ee6405c63544b99ef4635c",
+      "batch_id": "batch_3b2c601b-dcce-47df-ac61-673e7018e3d4",
+      "status": "imported",
+      "output_file_id": "file-batch_output-3daf846ac4894ffeac7647e6",
+      "count": 50000,
+      "result_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_output_file-batch_output-3daf846ac4894ffeac7647e6.jsonl",
+      "imported_count": 50000
+    },
+    "12": {
+      "file_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_input_20260112_120330_batch12.jsonl",
+      "file_id": "file-batch-ba43a3c127af4a72848ac559",
+      "batch_id": "batch_dc2a12cf-9d95-4a5d-b1b0-80737e77f936",
+      "status": "imported",
+      "output_file_id": "file-batch_output-fbe7c2449b594e20893d1360",
+      "count": 50000,
+      "result_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_output_file-batch_output-fbe7c2449b594e20893d1360.jsonl",
+      "imported_count": 50000
+    },
+    "13": {
+      "file_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_input_20260112_120330_batch13.jsonl",
+      "file_id": "file-batch-bd1397331a044e69971db885",
+      "batch_id": "batch_1bc8dc33-bf1b-4039-9628-3c7525e30f99",
+      "status": "imported",
+      "output_file_id": "file-batch_output-dbebbd57e9c74312ae50331b",
+      "count": 50000,
+      "result_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_output_file-batch_output-dbebbd57e9c74312ae50331b.jsonl",
+      "imported_count": 50000
+    },
+    "14": {
+      "file_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_input_20260112_120331_batch14.jsonl",
+      "file_id": "file-batch-91aacc79f81142dca3a6cc38",
+      "batch_id": "batch_a8605e0f-ff4d-489a-a566-2f44678771b8",
+      "status": "imported",
+      "output_file_id": "file-batch_output-41c5d0623211412199d58a76",
+      "count": 50000,
+      "result_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_output_file-batch_output-41c5d0623211412199d58a76.jsonl",
+      "imported_count": 50000
+    },
+    "15": {
+      "file_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_input_20260112_120335_batch15.jsonl",
+      "file_id": "file-batch-6444da02c5e547768279d2cf",
+      "batch_id": "batch_f574b1d4-f58e-4796-ab16-5933260b5867",
+      "status": "imported",
+      "output_file_id": "file-batch_output-4655f94603f641e497a35e04",
+      "count": 50000,
+      "result_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_output_file-batch_output-4655f94603f641e497a35e04.jsonl",
+      "imported_count": 50000
+    },
+    "16": {
+      "file_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_input_20260112_120340_batch16.jsonl",
+      "file_id": "file-batch-0d58fa2650844ccaaabac31d",
+      "batch_id": "batch_6c319ab5-4203-4f09-9704-79820d6b9c4f",
+      "status": "imported",
+      "output_file_id": "file-batch_output-890ebae9ecd14f5f8404ec6f",
+      "count": 50000,
+      "result_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_output_file-batch_output-890ebae9ecd14f5f8404ec6f.jsonl",
+      "imported_count": 50000
+    },
+    "17": {
+      "file_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_input_20260112_120346_batch17.jsonl",
+      "file_id": "file-batch-81f035eaefa849b494cee8c3",
+      "batch_id": "batch_7cf986a9-4804-41fe-9b9b-1dc56f618502",
+      "status": "imported",
+      "output_file_id": "file-batch_output-d18f9053e92b4fe5a2812d94",
+      "count": 50000,
+      "result_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_output_file-batch_output-d18f9053e92b4fe5a2812d94.jsonl",
+      "imported_count": 50000
+    },
+    "18": {
+      "file_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_input_20260112_120351_batch18.jsonl",
+      "file_id": "file-batch-336b85dc3d0545dc8be04e11",
+      "batch_id": "batch_7128fb18-7250-43c6-9185-e13a509fadf0",
+      "status": "imported",
+      "output_file_id": "file-batch_output-552abdb0f3e2447d9128e70c",
+      "count": 50000,
+      "result_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_output_file-batch_output-552abdb0f3e2447d9128e70c.jsonl",
+      "imported_count": 50000
+    },
+    "19": {
+      "file_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_input_20260112_120352_batch19.jsonl",
+      "file_id": "file-batch-2e21723932b34886a28f4f33",
+      "batch_id": "batch_77f63374-130e-4565-b3cc-c330e0a6da5c",
+      "status": "imported",
+      "output_file_id": "file-batch_output-0975add1e39f4e56b0055521",
+      "count": 50000,
+      "result_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_output_file-batch_output-0975add1e39f4e56b0055521.jsonl",
+      "imported_count": 50000
+    },
+    "20": {
+      "file_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_input_20260112_120355_batch20.jsonl",
+      "file_id": "file-batch-8d7547863d7643c692cc746f",
+      "batch_id": "batch_254c23cd-4cbd-4401-878e-76e9197b5b39",
+      "status": "imported",
+      "output_file_id": "file-batch_output-a45fd98727f84fd2880958fe",
+      "count": 50000,
+      "result_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_output_file-batch_output-a45fd98727f84fd2880958fe.jsonl",
+      "imported_count": 50000
+    },
+    "21": {
+      "file_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_input_20260112_120400_batch21.jsonl",
+      "file_id": "file-batch-6b2f549a2d2545a28899fcdc",
+      "batch_id": "batch_8a424fa5-cf22-42d0-8401-f75add3889b3",
+      "status": "imported",
+      "output_file_id": "file-batch_output-b20a47ccda824108ba8df7a7",
+      "count": 50000,
+      "result_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_output_file-batch_output-b20a47ccda824108ba8df7a7.jsonl",
+      "imported_count": 50000
+    },
+    "22": {
+      "file_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_input_20260112_120401_batch22.jsonl",
+      "file_id": "file-batch-537a3eb1d7b447f0acc3ae73",
+      "batch_id": "batch_65cf5eec-3c28-451f-976b-a60282f09190",
+      "status": "imported",
+      "output_file_id": "file-batch_output-06beec2fb9564c938b7be0bb",
+      "count": 50000,
+      "result_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_output_file-batch_output-06beec2fb9564c938b7be0bb.jsonl",
+      "imported_count": 50000
+    },
+    "23": {
+      "file_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_input_20260112_120401_batch23.jsonl",
+      "file_id": "file-batch-0708491844fe4740b08e838a",
+      "batch_id": "batch_0e45d245-e12c-49fa-a5e6-c635c3a78f62",
+      "status": "imported",
+      "output_file_id": "file-batch_output-351d2edcb3f042de9ed9cfb4",
+      "count": 50000,
+      "result_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_output_file-batch_output-351d2edcb3f042de9ed9cfb4.jsonl",
+      "imported_count": 50000
+    },
+    "24": {
+      "file_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_input_20260112_120402_batch24.jsonl",
+      "file_id": "file-batch-a0821d5dc3b749f1917692ff",
+      "batch_id": "batch_845ac99c-321f-4b4c-a317-f376566e8942",
+      "status": "imported",
+      "output_file_id": "file-batch_output-fe3f88a3d9bf42b0a5482294",
+      "count": 50000,
+      "result_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_output_file-batch_output-fe3f88a3d9bf42b0a5482294.jsonl",
+      "imported_count": 50000
+    },
+    "25": {
+      "file_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_input_20260112_120405_batch25.jsonl",
+      "file_id": "file-batch-760fe8c623a8462d8ba8e8a2",
+      "batch_id": "batch_b01f95fc-45fa-401d-8cb7-cd3fbf891d00",
+      "status": "imported",
+      "output_file_id": "file-batch_output-d3554ee776f2481b98dfa5a7",
+      "count": 50000,
+      "result_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_output_file-batch_output-d3554ee776f2481b98dfa5a7.jsonl",
+      "imported_count": 50000
+    },
+    "26": {
+      "file_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_input_20260112_120409_batch26.jsonl",
+      "file_id": "file-batch-8b80ddce57f94b65807d7be7",
+      "batch_id": "batch_e62286c9-9021-4c42-a968-76ea43f9b56d",
+      "status": "imported",
+      "output_file_id": "file-batch_output-d4511849e4484904ae5b9416",
+      "count": 50000,
+      "result_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_output_file-batch_output-d4511849e4484904ae5b9416.jsonl",
+      "imported_count": 50000
+    },
+    "27": {
+      "file_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_input_20260112_120414_batch27.jsonl",
+      "file_id": "file-batch-2f2b4dc899374cf58988e276",
+      "batch_id": "batch_b993529d-b9e2-43a7-a768-dd9e017bde5f",
+      "status": "imported",
+      "output_file_id": "file-batch_output-8a91033550654894b6cdff7c",
+      "count": 50000,
+      "result_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_output_file-batch_output-8a91033550654894b6cdff7c.jsonl",
+      "imported_count": 50000
+    },
+    "28": {
+      "file_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_input_20260112_120418_batch28.jsonl",
+      "file_id": "file-batch-9cfb8dc2a14c4ae2be31f610",
+      "batch_id": "batch_fcdda546-96c0-4911-81d6-a31786b77a3f",
+      "status": "imported",
+      "output_file_id": "file-batch_output-58dbd03139e54c4f89ac8e0c",
+      "count": 50000,
+      "result_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_output_file-batch_output-58dbd03139e54c4f89ac8e0c.jsonl",
+      "imported_count": 50000
+    },
+    "29": {
+      "file_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_input_20260112_120423_batch29.jsonl",
+      "file_id": "file-batch-cdd73814bd264698b79eb4a8",
+      "batch_id": "batch_787d4769-5377-47fb-b74f-583a3f1d0ed6",
+      "status": "imported",
+      "output_file_id": "file-batch_output-4ca7c11b006f4c21883d34ec",
+      "count": 50000,
+      "result_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_output_file-batch_output-4ca7c11b006f4c21883d34ec.jsonl",
+      "imported_count": 50000
+    },
+    "30": {
+      "file_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_input_20260112_120428_batch30.jsonl",
+      "file_id": "file-batch-fb78d6546f564e019515b710",
+      "batch_id": "batch_9dcf16e9-b141-4a52-9f19-5785e00ce55e",
+      "status": "imported",
+      "output_file_id": "file-batch_output-ac345c5b81214743be90c5f5",
+      "count": 50000,
+      "result_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_output_file-batch_output-ac345c5b81214743be90c5f5.jsonl",
+      "imported_count": 50000
+    },
+    "31": {
+      "file_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_input_20260112_120433_batch31.jsonl",
+      "file_id": "file-batch-d3b24edb23f0449dafb1b8da",
+      "batch_id": "batch_5c71cc85-56d1-4760-8d8c-e2dcbd1788a1",
+      "status": "imported",
+      "output_file_id": "file-batch_output-0dac804e810f4a46b7e08a09",
+      "count": 50000,
+      "result_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_output_file-batch_output-0dac804e810f4a46b7e08a09.jsonl",
+      "imported_count": 50000
+    },
+    "32": {
+      "file_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_input_20260112_120439_batch32.jsonl",
+      "file_id": "file-batch-17bb6192a95c4ef28dc2f08b",
+      "batch_id": "batch_b42f8d94-02d4-4394-9d49-1eb03f862a9f",
+      "status": "imported",
+      "output_file_id": "file-batch_output-770372015cf34a36bfcb7530",
+      "count": 50000,
+      "result_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_output_file-batch_output-770372015cf34a36bfcb7530.jsonl",
+      "imported_count": 50000
+    },
+    "33": {
+      "file_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_input_20260112_120445_batch33.jsonl",
+      "file_id": "file-batch-2a0cf3965330432686bcb061",
+      "batch_id": "batch_fedf5c05-29ae-4515-bfe9-2d16ce37a844",
+      "status": "imported",
+      "output_file_id": "file-batch_output-5f35e41d279e4f9f93783cc8",
+      "count": 50000,
+      "result_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_output_file-batch_output-5f35e41d279e4f9f93783cc8.jsonl",
+      "imported_count": 50000
+    },
+    "34": {
+      "file_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_input_20260112_120451_batch34.jsonl",
+      "file_id": "file-batch-48d9c5411980422e80c68d8a",
+      "batch_id": "batch_d7afef21-61dd-4aeb-825b-7e19a2f3872b",
+      "status": "imported",
+      "output_file_id": "file-batch_output-1c835464eada469ca3d2f28c",
+      "count": 50000,
+      "result_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_output_file-batch_output-1c835464eada469ca3d2f28c.jsonl",
+      "imported_count": 50000
+    },
+    "35": {
+      "file_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_input_20260112_120457_batch35.jsonl",
+      "file_id": "file-batch-0fc83a2b0d1744248ecd4b65",
+      "batch_id": "batch_e6c4de77-ad2d-4b1f-a4eb-0e7bc3434697",
+      "status": "imported",
+      "output_file_id": "file-batch_output-1c78439d5aea47b3804335ba",
+      "count": 50000,
+      "result_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_output_file-batch_output-1c78439d5aea47b3804335ba.jsonl",
+      "imported_count": 50000
+    },
+    "36": {
+      "file_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_input_20260112_120502_batch36.jsonl",
+      "file_id": "file-batch-33ac964d88bf4d06b99b11c2",
+      "batch_id": "batch_a815407a-6a80-40d5-b49e-b40ca56e7d3a",
+      "status": "imported",
+      "output_file_id": "file-batch_output-382ef34106b94e59b7e0c4d4",
+      "count": 50000,
+      "result_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_output_file-batch_output-382ef34106b94e59b7e0c4d4.jsonl",
+      "imported_count": 50000
+    },
+    "37": {
+      "file_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_input_20260112_120508_batch37.jsonl",
+      "file_id": "file-batch-d269c032ca3d46629c78bb9b",
+      "batch_id": "batch_f447fe4c-cceb-4005-8d84-f1fb67191a66",
+      "status": "imported",
+      "output_file_id": "file-batch_output-990cf23ad4cb47e08479d4dd",
+      "count": 50000,
+      "result_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_output_file-batch_output-990cf23ad4cb47e08479d4dd.jsonl",
+      "imported_count": 50000
+    },
+    "38": {
+      "file_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_input_20260112_120514_batch38.jsonl",
+      "file_id": "file-batch-b2e82600e4654194a76240e0",
+      "batch_id": "batch_5ddc3d1a-e5af-4bb8-b7b7-ba647f08566c",
+      "status": "imported",
+      "output_file_id": "file-batch_output-740fb66156314577b7acdbb3",
+      "count": 50000,
+      "result_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_output_file-batch_output-740fb66156314577b7acdbb3.jsonl",
+      "imported_count": 50000
+    },
+    "39": {
+      "file_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_input_20260112_120525_batch39.jsonl",
+      "file_id": "file-batch-a824b1f86bbb44f7924dace9",
+      "batch_id": "batch_a5404db9-ff9b-4218-a624-6edc072a1329",
+      "status": "imported",
+      "output_file_id": "file-batch_output-b6300d43802a4a7fab90320a",
+      "count": 50000,
+      "result_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_output_file-batch_output-b6300d43802a4a7fab90320a.jsonl",
+      "imported_count": 50000
+    },
+    "40": {
+      "file_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_input_20260112_120535_batch40.jsonl",
+      "file_id": "file-batch-7d911cbef1e145e1bce9042e",
+      "batch_id": "batch_16fbe497-497d-45b5-a52e-ecbd67ed96db",
+      "status": "imported",
+      "output_file_id": "file-batch_output-89fa311be95943d69b2d185c",
+      "count": 50000,
+      "result_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_output_file-batch_output-89fa311be95943d69b2d185c.jsonl",
+      "imported_count": 50000
+    },
+    "41": {
+      "file_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_input_20260112_120544_batch41.jsonl",
+      "file_id": "file-batch-5b2f45754a1b42eda38ac99b",
+      "batch_id": "batch_551b35f1-8677-4ebe-ab8d-1f4dcd6ba1e4",
+      "status": "imported",
+      "output_file_id": "file-batch_output-affd05bd008b44d6a82272ed",
+      "count": 50000,
+      "result_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_output_file-batch_output-affd05bd008b44d6a82272ed.jsonl",
+      "imported_count": 50000
+    },
+    "42": {
+      "file_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_input_20260112_120552_batch42.jsonl",
+      "file_id": "file-batch-c4091c43ae714d5f9805fd1e",
+      "batch_id": "batch_e66d2b12-1c3f-42b0-91dd-bfe58157f6ed",
+      "status": "imported",
+      "output_file_id": "file-batch_output-2180352aa37b465a8763ce2b",
+      "count": 50000,
+      "result_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_output_file-batch_output-2180352aa37b465a8763ce2b.jsonl",
+      "imported_count": 50000
+    },
+    "43": {
+      "file_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_input_20260112_120559_batch43.jsonl",
+      "file_id": "file-batch-a2303ad2e42a4f5abc657cc2",
+      "batch_id": "batch_5659b345-0c6c-4143-99a0-6a3cd3184dac",
+      "status": "imported",
+      "output_file_id": "file-batch_output-bf2dec80910d47ada79934bc",
+      "count": 50000,
+      "result_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_output_file-batch_output-bf2dec80910d47ada79934bc.jsonl",
+      "imported_count": 50000
+    },
+    "44": {
+      "file_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_input_20260112_120607_batch44.jsonl",
+      "file_id": "file-batch-524cb03a09b043faa617eea5",
+      "batch_id": "batch_9906e2d6-6ffc-478f-a189-8eeb5efb87bf",
+      "status": "imported",
+      "output_file_id": "file-batch_output-1e1cdb86dee642e6bd00aeca",
+      "count": 50000,
+      "result_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_output_file-batch_output-1e1cdb86dee642e6bd00aeca.jsonl",
+      "imported_count": 50000
+    },
+    "45": {
+      "file_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_input_20260112_120614_batch45.jsonl",
+      "file_id": "file-batch-920934229cfd4996884957a3",
+      "batch_id": "batch_cc3b8698-d421-4479-a672-137ed562b197",
+      "status": "imported",
+      "output_file_id": "file-batch_output-b53100bdf4b245feb5934ec3",
+      "count": 50000,
+      "result_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_output_file-batch_output-b53100bdf4b245feb5934ec3.jsonl",
+      "imported_count": 50000
+    },
+    "46": {
+      "file_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_input_20260112_120622_batch46.jsonl",
+      "file_id": "file-batch-820a4ae0f49340fd9a49fba5",
+      "batch_id": "batch_c4870b21-ad7d-4f44-9ab8-2aa01c5751df",
+      "status": "imported",
+      "output_file_id": "file-batch_output-3859e8ada0dc4894abf87bdb",
+      "count": 50000,
+      "result_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_output_file-batch_output-3859e8ada0dc4894abf87bdb.jsonl",
+      "imported_count": 50000
+    },
+    "47": {
+      "file_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_input_20260112_120631_batch47.jsonl",
+      "file_id": "file-batch-dc7ad86e513c43d0bdd1b29b",
+      "batch_id": "batch_0967401f-6ce0-4b8b-9110-6b581e76b392",
+      "status": "imported",
+      "output_file_id": "file-batch_output-a07afc70260b465980f5ef4c",
+      "count": 50000,
+      "result_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_output_file-batch_output-a07afc70260b465980f5ef4c.jsonl",
+      "imported_count": 50000
+    },
+    "48": {
+      "file_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_input_20260112_120637_batch48.jsonl",
+      "file_id": "file-batch-91c3f55234b54c509d78984e",
+      "batch_id": "batch_f8203b74-d08c-4def-bba1-fc8e36385e8d",
+      "status": "imported",
+      "output_file_id": "file-batch_output-76079f47711d4fb38cedc92a",
+      "count": 50000,
+      "result_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_output_file-batch_output-76079f47711d4fb38cedc92a.jsonl",
+      "imported_count": 50000
+    },
+    "49": {
+      "file_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_input_20260112_120644_batch49.jsonl",
+      "file_id": "file-batch-78d77e198945409a9e7a90a3",
+      "batch_id": "batch_2538b669-9deb-456c-a02d-8ee1a4f6ee03",
+      "status": "imported",
+      "output_file_id": "file-batch_output-8a591a8b47ab4fed8a52ae17",
+      "count": 50000,
+      "result_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_output_file-batch_output-8a591a8b47ab4fed8a52ae17.jsonl",
+      "imported_count": 50000
+    },
+    "50": {
+      "file_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_input_20260112_120651_batch50.jsonl",
+      "file_id": "file-batch-daf72d7b37b84ea5b1c33f05",
+      "batch_id": "batch_b31f4b1b-bd81-47f3-9bac-a109c6e9d4ed",
+      "status": "imported",
+      "output_file_id": "file-batch_output-1293f682107947dcb784b2ab",
+      "count": 50000,
+      "result_path": "/Users/zhaozengqing/github/AI/test/高新医疗/data/embedding_batch/embedding_output_file-batch_output-1293f682107947dcb784b2ab.jsonl",
+      "imported_count": 50000
+    }
+  },
+  "total_batches": 51,
+  "batch_size": 50000,
+  "created_at": "2026-01-12T12:02:56.403583",
+  "updated_at": "2026-01-12T15:19:43.452688"
+}

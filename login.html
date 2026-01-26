@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UDID 医疗器械管理系统 - 登录</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;500;600;700&family=Poppins:wght@400;500;600;700&display=swap"
+        rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: { DEFAULT: '#0891B2', light: '#22D3EE', dark: '#0E7490' },
+                        accent: { DEFAULT: '#059669', light: '#10B981' },
+                        surface: { DEFAULT: '#F8FAFC', light: '#FFFFFF', dark: '#F1F5F9' },
+                        text: { DEFAULT: '#1E293B', muted: '#64748B', light: '#94A3B8' },
+                        border: { DEFAULT: '#E2E8F0', light: '#F1F5F9' }
+                    },
+                    fontFamily: {
+                        heading: ['Poppins', 'sans-serif'],
+                        body: ['Open Sans', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Open Sans', sans-serif;
+        }
+
+        h1,
+        h2,
+        h3,
+        h4,
+        h5,
+        h6 {
+            font-family: 'Poppins', sans-serif;
+        }
+
+        .glass-card {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+        }
+
+        .gradient-bg {
+            background:
+                url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.05'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E"),
+                linear-gradient(135deg, #0891B2 0%, #059669 50%, #0E7490 100%);
+        }
+
+
+
+        .input-focus:focus {
+            border-color: #0891B2;
+            box-shadow: 0 0 0 4px rgba(8, 145, 178, 0.12);
+        }
+
+        .btn-loading {
+            pointer-events: none;
+            opacity: 0.7;
+        }
+
+        @keyframes float {
+
+            0%,
+            100% {
+                transform: translateY(0px);
+            }
+
+            50% {
+                transform: translateY(-10px);
+            }
+        }
+
+        .float-animation {
+            animation: float 6s ease-in-out infinite;
+        }
+
+        .float-animation-delay {
+            animation: float 6s ease-in-out infinite;
+            animation-delay: 2s;
+        }
+    </style>
+</head>
+
+<body class="min-h-screen bg-surface flex">
+    <!-- Left Panel - Branding -->
+    <div class="hidden lg:flex lg:w-1/2 gradient-bg pattern-bg relative overflow-hidden">
+        <div class="absolute inset-0 flex flex-col justify-center px-12 xl:px-20">
+            <!-- Logo -->
+            <div class="flex items-center gap-4 mb-12">
+                <div class="w-14 h-14 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center">
+                    <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="text-2xl font-heading font-bold text-white">UDID 管理系统</h1>
+                    <p class="text-white/70 text-sm">医疗器械唯一标识数据平台</p>
+                </div>
+            </div>
+
+            <!-- Features -->
+            <div class="space-y-6 mb-12">
+                <div class="flex items-start gap-4">
+                    <div class="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center flex-shrink-0">
+                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="text-white font-semibold">智能语义搜索</h3>
+                        <p class="text-white/70 text-sm">基于向量检索的医疗器械智能匹配</p>
+                    </div>
+                </div>
+                <div class="flex items-start gap-4">
+                    <div class="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center flex-shrink-0">
+                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="text-white font-semibold">数据统计分析</h3>
+                        <p class="text-white/70 text-sm">全面的产品数据统计与可视化</p>
+                    </div>
+                </div>
+                <div class="flex items-start gap-4">
+                    <div class="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center flex-shrink-0">
+                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="text-white font-semibold">安全访问控制</h3>
+                        <p class="text-white/70 text-sm">多角色权限管理与审计追踪</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stats -->
+            <div class="flex gap-8">
+                <div>
+                    <div class="text-3xl font-heading font-bold text-white" id="statsProducts">--</div>
+                    <div class="text-white/60 text-sm">产品数据</div>
+                </div>
+                <div>
+                    <div class="text-3xl font-heading font-bold text-white" id="statsCompanies">--</div>
+                    <div class="text-white/60 text-sm">企业数量</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Decorative Elements -->
+        <div class="absolute -right-20 -bottom-20 w-80 h-80 bg-white/5 rounded-full float-animation"></div>
+        <div class="absolute -left-10 top-20 w-40 h-40 bg-white/5 rounded-full float-animation-delay"></div>
+    </div>
+
+    <!-- Right Panel - Login Form -->
+    <div class="w-full lg:w-1/2 flex items-center justify-center px-6 py-12">
+        <div class="w-full max-w-md">
+            <!-- Mobile Logo -->
+            <div class="lg:hidden flex items-center justify-center gap-3 mb-8">
+                <div class="w-12 h-12 gradient-bg rounded-xl flex items-center justify-center">
+                    <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="text-xl font-heading font-bold text-text">UDID 管理系统</h1>
+                    <p class="text-text-muted text-xs">医疗器械唯一标识数据平台</p>
+                </div>
+            </div>
+
+            <!-- Login Card -->
+            <div class="glass-card rounded-3xl shadow-xl border border-border p-8">
+                <div class="text-center mb-8">
+                    <h2 class="text-2xl font-heading font-semibold text-text">欢迎登录</h2>
+                    <p class="text-text-muted text-sm mt-2">请使用您的账号登录系统</p>
+                </div>
+
+                <!-- Error Alert -->
+                <div id="loginError" class="hidden mb-6 p-4 bg-red-50 border border-red-200 rounded-xl">
+                    <div class="flex items-center gap-3">
+                        <svg class="w-5 h-5 text-red-500 flex-shrink-0" fill="none" stroke="currentColor"
+                            viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <span class="text-red-700 text-sm" id="loginErrorText"></span>
+                    </div>
+                </div>
+
+                <!-- Success Alert -->
+                <div id="loginSuccess" class="hidden mb-6 p-4 bg-green-50 border border-green-200 rounded-xl">
+                    <div class="flex items-center gap-3">
+                        <svg class="w-5 h-5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor"
+                            viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                        </svg>
+                        <span class="text-green-700 text-sm" id="loginSuccessText">登录成功，正在跳转...</span>
+                    </div>
+                </div>
+
+                <!-- Form -->
+                <form onsubmit="handleLogin(event)" class="space-y-5">
+                    <div>
+                        <label for="username" class="block text-sm font-medium text-text-muted mb-2">账号</label>
+                        <div class="relative">
+                            <svg class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-text-light" fill="none"
+                                stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                            </svg>
+                            <input type="text" id="username" autocomplete="username" required
+                                class="w-full pl-12 pr-4 py-3 border border-border rounded-xl outline-none transition-all input-focus text-sm"
+                                placeholder="请输入用户名">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label for="password" class="block text-sm font-medium text-text-muted mb-2">密码</label>
+                        <div class="relative">
+                            <svg class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-text-light" fill="none"
+                                stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                            </svg>
+                            <input type="password" id="password" autocomplete="current-password" required
+                                class="w-full pl-12 pr-4 py-3 border border-border rounded-xl outline-none transition-all input-focus text-sm"
+                                placeholder="请输入密码">
+                        </div>
+                    </div>
+
+                    <button type="submit" id="btnLogin"
+                        class="w-full py-3 bg-primary hover:bg-primary-dark text-white font-semibold rounded-xl transition-colors cursor-pointer flex items-center justify-center gap-2">
+                        <span id="btnLoginText">登录</span>
+                        <svg id="btnLoginSpinner" class="hidden w-5 h-5 animate-spin" fill="none" stroke="currentColor"
+                            viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                    </button>
+                </form>
+
+                <!-- Role Info -->
+                <div class="mt-6 pt-6 border-t border-border">
+                    <p class="text-xs text-text-light text-center mb-3">角色说明</p>
+                    <div class="flex justify-center gap-4">
+                        <div class="flex items-center gap-2 px-3 py-1.5 bg-primary/10 rounded-lg">
+                            <svg class="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                            </svg>
+                            <span class="text-xs text-primary font-medium">管理员</span>
+                        </div>
+                        <div class="flex items-center gap-2 px-3 py-1.5 bg-accent/10 rounded-lg">
+                            <svg class="w-4 h-4 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                            </svg>
+                            <span class="text-xs text-accent font-medium">普通成员</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Helper -->
+                <p class="text-xs text-text-light text-center mt-4">
+                    首次使用请联系管理员创建账号
+                </p>
+            </div>
+
+            <!-- Footer -->
+            <p class="text-center text-xs text-text-light mt-6">
+                UDID 医疗器械唯一标识管理系统 &copy; 2024
+            </p>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '';
+
+        // Load stats on page load
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                const res = await fetch(`${API_BASE}/api/stats`);
+                const data = await res.json();
+                if (data.success) {
+                    document.getElementById('statsProducts').textContent =
+                        (data.data.total_products || 0).toLocaleString();
+                    document.getElementById('statsCompanies').textContent =
+                        (data.data.manufacturers_count || 0).toLocaleString();
+                }
+            } catch (e) {
+                console.log('Stats load failed:', e);
+            }
+        });
+
+        async function handleLogin(event) {
+            event.preventDefault();
+
+            const btn = document.getElementById('btnLogin');
+            const btnText = document.getElementById('btnLoginText');
+            const btnSpinner = document.getElementById('btnLoginSpinner');
+            const errorBox = document.getElementById('loginError');
+            const errorText = document.getElementById('loginErrorText');
+            const successBox = document.getElementById('loginSuccess');
+
+            errorBox.classList.add('hidden');
+            successBox.classList.add('hidden');
+
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value;
+
+            if (!username || !password) {
+                errorText.textContent = '请输入账号和密码';
+                errorBox.classList.remove('hidden');
+                return;
+            }
+
+            // Show loading state
+            btn.classList.add('btn-loading');
+            btnText.textContent = '登录中...';
+            btnSpinner.classList.remove('hidden');
+
+            try {
+                const res = await fetch(`${API_BASE}/api/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ username, password })
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    successBox.classList.remove('hidden');
+                    const role = data.data?.role || 'user';
+                    const successText = document.getElementById('loginSuccessText');
+
+                    if (role === 'admin') {
+                        successText.textContent = '登录成功，正在跳转到管理后台...';
+                        setTimeout(() => {
+                            window.location.href = '/admin';
+                        }, 800);
+                    } else {
+                        successText.textContent = '登录成功，正在跳转到查询系统...';
+                        setTimeout(() => {
+                            window.location.href = '/';
+                        }, 800);
+                    }
+                    return;
+                }
+
+                errorText.textContent = data.error || '登录失败，请检查账号密码';
+                errorBox.classList.remove('hidden');
+            } catch (e) {
+                errorText.textContent = '网络错误，请稍后再试';
+                errorBox.classList.remove('hidden');
+            } finally {
+                btn.classList.remove('btn-loading');
+                btnText.textContent = '登录';
+                btnSpinner.classList.add('hidden');
+            }
+        }
+
+        // Enter key support
+        document.getElementById('password').addEventListener('keyup', (e) => {
+            if (e.key === 'Enter') {
+                document.getElementById('btnLogin').click();
+            }
+        });
+    </script>
+</body>
+
+</html>
