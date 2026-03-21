@@ -23,37 +23,60 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 import requests
 import numpy as np
+from urllib.parse import urlsplit
+
+from config_utils import load_env_file_once, merge_config_sources
+from retry_utils import retry_with_backoff
+from db_backend import connect as db_connect, is_postgres_backend
 
 # 配置
-CONFIG_PATH = os.path.join(os.path.dirname(__file__), 'config.json')
-DB_PATH = os.path.join(os.path.dirname(__file__), 'udid_hybrid_lake.db')
-BATCH_DIR = os.path.join(os.path.dirname(__file__), 'data', 'embedding_batch')
+BASE_DIR = os.path.dirname(__file__)
+CONFIG_PATH = os.path.join(BASE_DIR, 'config.json')
+DB_PATH = os.path.join(BASE_DIR, 'udid_hybrid_lake.db')
+BATCH_DIR = os.path.join(BASE_DIR, 'data', 'embedding_batch')
 PIPELINE_STATE_DB = os.path.join(BATCH_DIR, 'pipeline_state.db')
 LEGACY_PIPELINE_STATE_FILE = os.path.join(BATCH_DIR, 'pipeline_state.json')
 
 # 确保目录存在
 os.makedirs(BATCH_DIR, exist_ok=True)
 
+load_env_file_once(BASE_DIR, log_prefix='[Batch]')
+
+def _url_origin(api_base: str) -> str:
+    api_base = (api_base or '').strip()
+    if not api_base:
+        return ''
+    parts = urlsplit(api_base)
+    if parts.scheme and parts.netloc:
+        return f"{parts.scheme}://{parts.netloc}"
+    return api_base.rstrip('/')
+
+
 def load_config() -> Dict:
-    """加载配置"""
-    try:
-        if os.path.exists(CONFIG_PATH):
-            with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
-                return json.load(f)
-    except Exception as e:
-        print(f"[Batch] 加载配置失败: {e}")
-    return {}
+    """加载配置（优先级：数据库 > 环境变量 > 配置文件）"""
+    env_mappings = {
+        'EMBEDDING_API_URL': 'embedding_api_url',
+        'EMBEDDING_API_KEY': 'embedding_api_key',
+        'EMBEDDING_MODEL': 'embedding_model',
+    }
+    return merge_config_sources(
+        config_paths=[CONFIG_PATH],
+        db_path=DB_PATH,
+        env_mapping=env_mappings,
+        log_prefix='[Batch]',
+        env_overrides_db=False,
+    )
 
 def get_api_config(config: Dict = None) -> tuple:
-    """获取 API 配置"""
+    """获取 API 配置（数据库优先，环境变量兜底）"""
     if config is None:
         config = load_config()
-    
-    api_base = os.getenv('EMBEDDING_API_URL') or config.get('embedding_api_url') or config.get('api_base_url', '')
+
+    api_base = config.get('embedding_api_url') or config.get('api_base_url', '') or os.getenv('EMBEDDING_API_URL', '')
     api_base = api_base.rstrip('/')
-    api_key = os.getenv('EMBEDDING_API_KEY') or config.get('embedding_api_key') or config.get('api_key', '')
-    model = os.getenv('EMBEDDING_MODEL') or config.get('embedding_model', 'text-embedding-v3')
-    
+    api_key = config.get('embedding_api_key') or config.get('api_key', '') or os.getenv('EMBEDDING_API_KEY', '')
+    model = config.get('embedding_model', 'text-embedding-v3') or os.getenv('EMBEDDING_MODEL') or 'text-embedding-v3'
+
     return api_base, api_key, model
 
 def build_product_text(product: Dict) -> str:
@@ -87,6 +110,7 @@ def get_product_text_hash(conn: sqlite3.Connection, di_code: str) -> str:
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
+
     cursor.execute('''
         SELECT di_code, product_name, model, description, scope
         FROM products
@@ -124,7 +148,7 @@ def generate_jsonl(conn: sqlite3.Connection = None, output_path: str = None,
         {'success': bool, 'file_path': str, 'count': int, 'total_batches': int}
     """
     if conn is None:
-        conn = sqlite3.connect(DB_PATH)
+        conn = db_connect(DB_PATH)
     
     config = load_config()
     _, _, model = get_api_config(config)
@@ -144,60 +168,45 @@ def generate_jsonl(conn: sqlite3.Connection = None, output_path: str = None,
     # 统计总数
     cursor.execute('SELECT COUNT(*) FROM products')
     total_products = cursor.fetchone()[0]
-    cursor.execute('SELECT COUNT(*) FROM embeddings')
+    cursor.execute('SELECT COUNT(*) FROM embeddings WHERE embedding IS NOT NULL')
     existing_count = cursor.fetchone()[0]
     
     print(f"[Batch] 产品总数: {total_products}, 已有向量: {existing_count}")
     print(f"[Batch] ========== 步骤 1/5: 分析待处理数据 ==========")
     
     if incremental:
-        # 增量模式：用分批方式获取新增产品（避免大表 JOIN 卡死）
-        print(f"[Batch] 正在查询新增产品（分批处理避免卡死）...")
+        # 增量模式：新增 + 空向量补齐
+        print(f"[Batch] 正在查询新增/缺失向量产品...")
+        cursor.execute('''
+            SELECT p.di_code, p.product_name, p.model, p.description, p.scope
+            FROM products p
+            LEFT JOIN embeddings e ON p.di_code = e.di_code
+            WHERE e.di_code IS NULL OR e.embedding IS NULL
+            ORDER BY p.last_updated ASC
+        ''')
+        new_products = cursor.fetchall()
+        print(f"[Batch] ✓ 新增/缺失向量产品: {len(new_products)} 个")
         
-        # 先获取所有已有向量的 di_code
-        cursor.execute('SELECT di_code FROM embeddings')
-        existing_codes = set(row[0] for row in cursor.fetchall())
-        print(f"[Batch] 已有向量 di_code 数量: {len(existing_codes)}")
-        
-        # 分批获取产品并筛选
-        new_products = []
-        batch_fetch_size = 100000
-        offset = 0
-        
-        while True:
-            cursor.execute('''
-                SELECT di_code, product_name, model, description, scope 
-                FROM products
-                LIMIT ? OFFSET ?
-            ''', (batch_fetch_size, offset))
-            batch = cursor.fetchall()
-            if not batch:
-                break
-            
-            # 筛选不在 embeddings 中的产品
-            for row in batch:
-                if row[0] not in existing_codes:
-                    new_products.append(row)
-            
-            offset += batch_fetch_size
-            print(f"[Batch] 已扫描 {offset} 条产品，找到 {len(new_products)} 条新增")
-        
-        print(f"[Batch] ✓ 新增产品: {len(new_products)} 个")
-        
-        # 变更产品检测（简化：如果新增太多就跳过变更检测）
+        # 变更产品检测（全量扫描变更，避免固定窗口导致漏处理）
         changed_products = []
-        if len(new_products) < 10000:
-            print(f"[Batch] 正在检测变更产品...")
-            cursor.execute('''
-                SELECT p.di_code, p.product_name, p.model, p.description, p.scope, e.text_hash
-                FROM products p
-                INNER JOIN embeddings e ON p.di_code = e.di_code
-                WHERE p.last_updated > e.created_at
-                LIMIT 10000
-            ''')
-            candidate_products = cursor.fetchall()
-            print(f"[Batch] 可能变更产品: {len(candidate_products)} 个")
-            
+        print(f"[Batch] 正在检测变更产品...")
+        batch_fetch_size = 100000
+
+        cursor.execute('''
+            SELECT p.di_code, p.product_name, p.model, p.description, p.scope, e.text_hash
+            FROM products p
+            INNER JOIN embeddings e ON p.di_code = e.di_code
+            WHERE e.embedding IS NOT NULL
+              AND p.last_updated > e.created_at
+            ORDER BY p.last_updated ASC
+        ''')
+
+        checked = 0
+        while True:
+            candidate_products = cursor.fetchmany(batch_fetch_size)
+            if not candidate_products:
+                break
+            checked += len(candidate_products)
             for row in candidate_products:
                 di_code, product_name, model_val, description, scope, old_hash = row
                 product = {
@@ -211,10 +220,9 @@ def generate_jsonl(conn: sqlite3.Connection = None, output_path: str = None,
                 new_hash = compute_text_hash(text)
                 if new_hash != old_hash:
                     changed_products.append((di_code, product_name, model_val, description, scope))
-            
-            print(f"[Batch] ✓ 确认内容变更: {len(changed_products)} 个")
-        else:
-            print(f"[Batch] 新增产品较多，跳过变更检测")
+            print(f"[Batch] 已校验变更候选 {checked} 条，确认变更 {len(changed_products)} 条")
+
+        print(f"[Batch] ✓ 确认内容变更: {len(changed_products)} 个")
         
         # 合并需要处理的产品
         all_products = list(new_products) + changed_products
@@ -297,6 +305,7 @@ def generate_jsonl(conn: sqlite3.Connection = None, output_path: str = None,
 # Step 2: 上传文件
 # ==========================================
 
+@retry_with_backoff(max_retries=3, base_delay=2.0)
 def upload_file(file_path: str, config: Dict = None) -> Optional[str]:
     """
     上传文件到阿里云
@@ -346,6 +355,7 @@ def upload_file(file_path: str, config: Dict = None) -> Optional[str]:
 # Step 3: 创建 Batch 任务
 # ==========================================
 
+@retry_with_backoff(max_retries=3, base_delay=2.0)
 def create_batch(file_id: str, config: Dict = None) -> Optional[str]:
     """
     创建 Batch 任务
@@ -398,24 +408,15 @@ def create_batch(file_id: str, config: Dict = None) -> Optional[str]:
 # Step 4: 查询任务状态
 # ==========================================
 
-# 全局状态记录
-_pipeline_state = {
-    'batch_id': None,
-    'status': 'idle',
-    'count': 0,
-    'file_path': None,
-    'output_file_id': None,
-    'error': None
-}
-
 def get_pipeline_state() -> Dict:
-    """获取当前批处理流水线状态"""
-    return _pipeline_state.copy()
+    """从SQLite读取流水线状态"""
+    return load_pipeline_state()
 
 def set_pipeline_state(**kwargs):
-    """更新批处理流水线状态"""
-    global _pipeline_state
-    _pipeline_state.update(kwargs)
+    """保存流水线状态到SQLite"""
+    state = load_pipeline_state()
+    state.update(kwargs)
+    save_pipeline_state(state)
 
 # ==========================================
 # 批处理任务记录（用于智能检测）
@@ -425,7 +426,7 @@ BATCH_TASK_DB = os.path.join(os.path.dirname(__file__), 'batch_tasks.db')
 
 def _init_batch_task_db():
     """初始化批处理任务记录表"""
-    conn = sqlite3.connect(BATCH_TASK_DB)
+    conn = db_connect(BATCH_TASK_DB)
     conn.execute('''
         CREATE TABLE IF NOT EXISTS batch_tasks (
             batch_id TEXT PRIMARY KEY,
@@ -443,7 +444,7 @@ def _init_batch_task_db():
 def save_batch_task(batch_id: str, count: int):
     """保存批处理任务记录"""
     _init_batch_task_db()
-    conn = sqlite3.connect(BATCH_TASK_DB)
+    conn = db_connect(BATCH_TASK_DB)
     conn.execute('''
         INSERT OR REPLACE INTO batch_tasks (batch_id, count, status, created_at)
         VALUES (?, ?, 'pending', ?)
@@ -452,7 +453,7 @@ def save_batch_task(batch_id: str, count: int):
     conn.close()
     print(f"[Batch] 已记录任务: {batch_id}, 数量: {count}")
 
-def get_pending_batch_tasks(max_age_hours: int = 24) -> List[Dict]:
+def get_pending_batch_tasks(max_age_hours: Optional[int] = None) -> List[Dict]:
     """
     获取待导入的批处理任务（未导入且在指定时间内创建的）
     
@@ -460,18 +461,25 @@ def get_pending_batch_tasks(max_age_hours: int = 24) -> List[Dict]:
         [{'batch_id': str, 'count': int, 'created_at': str, 'status': str}, ...]
     """
     _init_batch_task_db()
-    conn = sqlite3.connect(BATCH_TASK_DB)
+    conn = db_connect(BATCH_TASK_DB)
     cursor = conn.cursor()
     
-    # 获取指定时间内创建的、未导入的任务
-    cutoff = (datetime.now() - timedelta(hours=max_age_hours)).isoformat()
-    cursor.execute('''
-        SELECT batch_id, count, status, created_at 
-        FROM batch_tasks 
-        WHERE imported_at IS NULL 
-          AND created_at > ?
-        ORDER BY created_at DESC
-    ''', (cutoff,))
+    if max_age_hours is None:
+        cursor.execute('''
+            SELECT batch_id, count, status, created_at
+            FROM batch_tasks
+            WHERE imported_at IS NULL
+            ORDER BY created_at DESC
+        ''')
+    else:
+        cutoff = (datetime.now() - timedelta(hours=max_age_hours)).isoformat()
+        cursor.execute('''
+            SELECT batch_id, count, status, created_at
+            FROM batch_tasks
+            WHERE imported_at IS NULL
+              AND created_at > ?
+            ORDER BY created_at DESC
+        ''', (cutoff,))
     
     tasks = []
     for row in cursor.fetchall():
@@ -488,7 +496,7 @@ def get_pending_batch_tasks(max_age_hours: int = 24) -> List[Dict]:
 def mark_batch_imported(batch_id: str, imported_count: int):
     """标记批处理任务已导入"""
     _init_batch_task_db()
-    conn = sqlite3.connect(BATCH_TASK_DB)
+    conn = db_connect(BATCH_TASK_DB)
     conn.execute('''
         UPDATE batch_tasks 
         SET status = 'imported', imported_at = ?, imported_count = ?
@@ -507,7 +515,7 @@ def check_and_import_completed_tasks(conn: sqlite3.Connection = None) -> Dict:
     """
     print(f"[Batch] ========== 检查待导入任务 ==========")
     
-    pending_tasks = get_pending_batch_tasks(max_age_hours=24)
+    pending_tasks = get_pending_batch_tasks(max_age_hours=None)
     print(f"[Batch] 找到 {len(pending_tasks)} 个待处理任务")
     
     if not pending_tasks:
@@ -534,10 +542,13 @@ def check_and_import_completed_tasks(conn: sqlite3.Connection = None) -> Dict:
                 imported = import_result.get('imported', 0)
                 total_imported += imported
                 
-                # 标记已导入
-                mark_batch_imported(batch_id, imported)
                 task['imported'] = imported
-                task['success'] = True
+                task['failed'] = import_result.get('failed', 0)
+                task['success'] = bool(import_result.get('success'))
+                if task['success']:
+                    mark_batch_imported(batch_id, imported)
+                else:
+                    task['error'] = import_result.get('error') or '导入结果失败或无有效记录'
             else:
                 task['success'] = False
                 task['error'] = '下载结果失败'
@@ -581,6 +592,7 @@ def get_batch_status(batch_id: str, config: Dict = None) -> Dict:
         print(f"[Batch] 查询状态失败: {e}")
         return {}
 
+@retry_with_backoff(max_retries=5, base_delay=5.0)
 def check_batch_status(batch_id: str, config: Dict = None) -> Dict:
     """
     检查批处理任务状态（兼容多种 API）
@@ -597,7 +609,8 @@ def check_batch_status(batch_id: str, config: Dict = None) -> Dict:
     # compatible-mode 使用 OpenAI 兼容格式
     if 'dashscope' in api_base and 'compatible-mode' not in api_base:
         # DashScope 异步任务 API
-        url = f"https://dashscope.aliyuncs.com/api/v1/tasks/{batch_id}"
+        dashscope_origin = _url_origin(api_base)
+        url = f"{dashscope_origin}/api/v1/tasks/{batch_id}"
         headers = {'Authorization': f'Bearer {api_key}'}
         
         try:
@@ -680,14 +693,14 @@ def wait_for_completion(batch_id: str, config: Dict = None,
     start_time = time.time()
     
     while True:
-        status = get_batch_status(batch_id, config)
+        status = check_batch_status(batch_id, config)
         current_status = status.get('status', 'unknown')
         
         print(f"[Batch] 状态: {current_status}, 已等待: {int(time.time() - start_time)}s")
         
         if current_status == 'completed':
             return status
-        elif current_status in ['failed', 'expired', 'cancelled']:
+        elif current_status in ['failed', 'expired', 'cancelled', 'error']:
             print(f"[Batch] 任务失败: {status}")
             return status
         
@@ -701,6 +714,7 @@ def wait_for_completion(batch_id: str, config: Dict = None,
 # Step 5: 下载结果
 # ==========================================
 
+@retry_with_backoff(max_retries=3, base_delay=2.0)
 def download_results(batch_id: str, config: Dict = None) -> Optional[str]:
     """
     根据 batch_id 下载批处理结果
@@ -722,13 +736,33 @@ def download_results(batch_id: str, config: Dict = None) -> Optional[str]:
         print(f"[Batch] ✗ 任务未完成，当前状态: {status.get('status')}")
         return None
     
+    output_url = status.get('output_url')
+    if output_url:
+        print(f"[Batch] 检测到 output_url，直接下载: {output_url}")
+        return download_result_url(output_url, batch_id)
+
     output_file_id = status.get('output_file_id')
     if not output_file_id:
-        print(f"[Batch] ✗ 未找到结果文件 ID")
+        print(f"[Batch] ✗ 未找到结果文件 ID 或 output_url")
         return None
     
     print(f"[Batch] output_file_id: {output_file_id}")
     return download_result(output_file_id, config)
+
+
+def download_result_url(url: str, batch_id: str) -> Optional[str]:
+    """通过直链下载批处理结果（DashScope 原生模式）"""
+    try:
+        local_path = os.path.join(BATCH_DIR, f"result_{batch_id}.jsonl")
+        response = requests.get(url, timeout=120)
+        response.raise_for_status()
+        with open(local_path, 'wb') as f:
+            f.write(response.content)
+        print(f"[Batch] ✓ 已下载结果文件: {local_path}")
+        return local_path
+    except requests.RequestException as e:
+        print(f"[Batch] 下载 output_url 失败: {e}")
+        return None
 
 def download_result(file_id: str, config: Dict = None) -> Optional[str]:
     """
@@ -786,7 +820,7 @@ def import_results(result_file: str, conn: sqlite3.Connection = None) -> Dict:
     print(f"[Batch] 结果文件: {result_file}")
     
     if conn is None:
-        conn = sqlite3.connect(DB_PATH)
+        conn = db_connect(DB_PATH)
     
     cursor = conn.cursor()
     
@@ -803,6 +837,7 @@ def import_results(result_file: str, conn: sqlite3.Connection = None) -> Dict:
     imported = 0
     failed = 0
     total_lines = 0
+    imported_di_codes = []
     
     # 先统计总行数
     with open(result_file, 'r', encoding='utf-8') as f:
@@ -853,6 +888,7 @@ def import_results(result_file: str, conn: sqlite3.Connection = None) -> Dict:
                 ''', (di_code, blob, text_hash))
                 
                 imported += 1
+                imported_di_codes.append(di_code)
                 
                 if imported % 5000 == 0:
                     progress = (line_num / total_lines * 100) if total_lines > 0 else 0
@@ -869,10 +905,25 @@ def import_results(result_file: str, conn: sqlite3.Connection = None) -> Dict:
     print(f"[Batch] ✓ 成功导入: {imported} 条")
     print(f"[Batch] ✗ 失败: {failed} 条")
     
+    if imported > 0 and failed == 0:
+        success = True
+        error_msg = None
+    elif imported > 0 and failed > 0:
+        success = False
+        error_msg = 'partial import'
+    elif imported == 0 and failed > 0:
+        success = False
+        error_msg = 'all records failed'
+    else:
+        success = False
+        error_msg = 'empty result file'
     return {
-        'success': True,
+        'success': success,
+        'partial': imported > 0 and failed > 0,
         'imported': imported,
-        'failed': failed
+        'failed': failed,
+        'imported_di_codes': imported_di_codes,
+        'error': error_msg
     }
 
 # ==========================================
@@ -880,7 +931,7 @@ def import_results(result_file: str, conn: sqlite3.Connection = None) -> Dict:
 # ==========================================
 
 def _get_pipeline_conn() -> sqlite3.Connection:
-    conn = sqlite3.connect(PIPELINE_STATE_DB, timeout=30, check_same_thread=False)
+    conn = db_connect(PIPELINE_STATE_DB, timeout=30, check_same_thread=False)
     conn.execute('PRAGMA journal_mode=WAL')
     conn.execute('PRAGMA synchronous=NORMAL')
     return conn
@@ -901,6 +952,7 @@ def _init_pipeline_state_db(conn: sqlite3.Connection) -> None:
             batch_id TEXT,
             status TEXT,
             output_file_id TEXT,
+            output_url TEXT,
             result_path TEXT,
             count INTEGER,
             imported_count INTEGER,
@@ -908,6 +960,10 @@ def _init_pipeline_state_db(conn: sqlite3.Connection) -> None:
             updated_at TEXT
         )
     ''')
+    try:
+        cursor.execute("ALTER TABLE pipeline_batches ADD COLUMN output_url TEXT")
+    except sqlite3.OperationalError:
+        pass
     conn.commit()
 
 def load_pipeline_state() -> Dict:
@@ -951,7 +1007,7 @@ def load_pipeline_state() -> Dict:
         except Exception as e:
             print(f"[Pipeline] 迁移旧状态失败: {e}")
 
-    return state
+    return reconcile_pipeline_state(state)
 
 def save_pipeline_state(state: Dict):
     """保存流水线状态"""
@@ -976,8 +1032,8 @@ def save_pipeline_state(state: Dict):
         cursor.execute('''
             INSERT OR REPLACE INTO pipeline_batches (
                 batch_index, file_path, file_id, batch_id, status, output_file_id,
-                result_path, count, imported_count, error, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                output_url, result_path, count, imported_count, error, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             str(batch_index),
             batch.get('file_path'),
@@ -985,6 +1041,7 @@ def save_pipeline_state(state: Dict):
             batch.get('batch_id'),
             batch.get('status'),
             batch.get('output_file_id'),
+            batch.get('output_url'),
             batch.get('result_path'),
             batch.get('count'),
             batch.get('imported_count'),
@@ -995,6 +1052,27 @@ def save_pipeline_state(state: Dict):
     conn.commit()
     conn.close()
 
+
+def reconcile_pipeline_state(state: Dict) -> Dict:
+    """
+    修复流水线状态文件中的悬空 result_path，并保持 imported 状态干净。
+    """
+    changed = False
+    for _, batch in state.get('batches', {}).items():
+        status = batch.get('status')
+        result_path = batch.get('result_path')
+        if status == 'imported' and result_path:
+            batch['result_path'] = None
+            changed = True
+            continue
+        if result_path and not os.path.exists(result_path):
+            if status in ('downloaded', 'completed'):
+                batch['result_path'] = None
+                changed = True
+    if changed:
+        save_pipeline_state(state)
+    return state
+
 # ==========================================
 # 流水线操作
 # ==========================================
@@ -1004,7 +1082,7 @@ def pipeline_generate_all(conn: sqlite3.Connection = None, batch_size: int = 500
     生成所有批次的 JSONL 文件
     """
     if conn is None:
-        conn = sqlite3.connect(DB_PATH)
+        conn = db_connect(DB_PATH)
     
     state = load_pipeline_state()
     state['batch_size'] = batch_size
@@ -1023,10 +1101,10 @@ def pipeline_generate_all(conn: sqlite3.Connection = None, batch_size: int = 500
     cursor.execute('SELECT COUNT(*) FROM products')
     total_products = cursor.fetchone()[0]
     
-    cursor.execute('SELECT COUNT(*) FROM embeddings')
+    cursor.execute('SELECT COUNT(*) FROM embeddings WHERE embedding IS NOT NULL')
     existing_count = cursor.fetchone()[0]
 
-    cursor.execute("SELECT COUNT(*) FROM embeddings WHERE text_hash IS NULL OR text_hash = ''")
+    cursor.execute("SELECT COUNT(*) FROM embeddings WHERE embedding IS NOT NULL AND (text_hash IS NULL OR text_hash = '')")
     stale_count = cursor.fetchone()[0]
 
     remaining_est = max(0, total_products - existing_count) + stale_count
@@ -1050,6 +1128,7 @@ def pipeline_generate_all(conn: sqlite3.Connection = None, batch_size: int = 500
                 'batch_id': None,
                 'status': 'generated',
                 'output_file_id': None,
+                'output_url': None,
                 'count': result['count']
             }
             generated += 1
@@ -1184,17 +1263,18 @@ def pipeline_check_status(config: Dict = None) -> Dict:
             continue
         
         # 查询远程状态
-        remote_status = get_batch_status(batch_id, config)
+        remote_status = check_batch_status(batch_id, config)
         new_status = remote_status.get('status', 'unknown')
         
         # 更新本地状态
         if new_status == 'completed':
             state['batches'][batch_idx]['status'] = 'completed'
             state['batches'][batch_idx]['output_file_id'] = remote_status.get('output_file_id')
+            state['batches'][batch_idx]['output_url'] = remote_status.get('output_url')
             stats['completed'] += 1
-        elif new_status in ['failed', 'expired', 'cancelled']:
+        elif new_status in ['failed', 'expired', 'cancelled', 'error']:
             state['batches'][batch_idx]['status'] = 'failed'
-            state['batches'][batch_idx]['error'] = remote_status.get('errors')
+            state['batches'][batch_idx]['error'] = remote_status.get('errors') or remote_status.get('error')
             stats['failed'] += 1
         else:
             state['batches'][batch_idx]['status'] = new_status
@@ -1227,7 +1307,7 @@ def pipeline_download_and_import_one(conn: sqlite3.Connection = None, config: Di
         {'success': bool, 'batch_idx': str, 'imported': int}
     """
     if conn is None:
-        conn = sqlite3.connect(DB_PATH)
+        conn = db_connect(DB_PATH)
     if config is None:
         config = load_config()
     
@@ -1243,12 +1323,16 @@ def pipeline_download_and_import_one(conn: sqlite3.Connection = None, config: Di
             continue
         
         output_file_id = batch_info.get('output_file_id')
-        if not output_file_id:
+        output_url = batch_info.get('output_url')
+        if not output_file_id and not output_url:
             continue
         
         # 下载
         print(f"[Pipeline] 下载批次 {batch_idx}...")
-        result_path = download_result(output_file_id, config)
+        if output_url:
+            result_path = download_result_url(output_url, batch_info.get('batch_id') or batch_idx)
+        else:
+            result_path = download_result(output_file_id, config)
         if not result_path:
             return {'success': False, 'error': f'下载批次 {batch_idx} 失败'}
         
@@ -1258,25 +1342,45 @@ def pipeline_download_and_import_one(conn: sqlite3.Connection = None, config: Di
         # 导入
         print(f"[Pipeline] 导入批次 {batch_idx}...")
         result = import_results(result_path, conn)
-        
-        state['batches'][batch_idx]['status'] = 'imported'
-        state['batches'][batch_idx]['imported_count'] = result.get('imported', 0)
+
+        imported_count = int(result.get('imported', 0))
+        is_success = bool(result.get('success')) and imported_count > 0
+        if is_success:
+            state['batches'][batch_idx]['status'] = 'imported'
+            state['batches'][batch_idx]['imported_count'] = imported_count
+            state['batches'][batch_idx]['result_path'] = None
+            save_pipeline_state(state)
+
+            # 清理文件
+            if os.path.exists(result_path):
+                os.remove(result_path)
+                print(f"[Pipeline] 已删除 output 文件")
+
+            input_path = batch_info.get('file_path')
+            if input_path and os.path.exists(input_path):
+                os.remove(input_path)
+                print(f"[Pipeline] 已删除 input 文件")
+
+            return {
+                'success': True,
+                'batch_idx': batch_idx,
+                'imported': imported_count
+            }
+
+        # 导入失败或零成功记录，保留结果文件以便排查/重试
+        state['batches'][batch_idx]['status'] = 'failed'
+        state['batches'][batch_idx]['error'] = {
+            'message': '导入失败或无有效记录',
+            'imported': imported_count,
+            'failed': int(result.get('failed', 0))
+        }
         save_pipeline_state(state)
-        
-        # 清理文件
-        if os.path.exists(result_path):
-            os.remove(result_path)
-            print(f"[Pipeline] 已删除 output 文件")
-        
-        input_path = batch_info.get('file_path')
-        if input_path and os.path.exists(input_path):
-            os.remove(input_path)
-            print(f"[Pipeline] 已删除 input 文件")
-        
         return {
-            'success': True,
+            'success': False,
             'batch_idx': batch_idx,
-            'imported': result.get('imported', 0)
+            'imported': imported_count,
+            'failed': int(result.get('failed', 0)),
+            'error': '导入失败或无有效记录'
         }
     
     return {'success': True, 'batch_idx': None, 'imported': 0, 'message': '没有待处理的批次'}
@@ -1300,10 +1404,14 @@ def pipeline_download_all(config: Dict = None) -> Dict:
             continue
         
         output_file_id = batch_info.get('output_file_id')
-        if not output_file_id:
+        output_url = batch_info.get('output_url')
+        if not output_file_id and not output_url:
             continue
         
-        result_path = download_result(output_file_id, config)
+        if output_url:
+            result_path = download_result_url(output_url, batch_info.get('batch_id') or batch_idx)
+        else:
+            result_path = download_result(output_file_id, config)
         if result_path:
             state['batches'][batch_idx]['result_path'] = result_path
             downloaded += 1
@@ -1321,7 +1429,7 @@ def pipeline_import_all(conn: sqlite3.Connection = None, cleanup: bool = True) -
         cleanup: 导入成功后是否删除源文件（节省磁盘空间）
     """
     if conn is None:
-        conn = sqlite3.connect(DB_PATH)
+        conn = db_connect(DB_PATH)
     
     state = load_pipeline_state()
     total_imported = 0
@@ -1343,15 +1451,27 @@ def pipeline_import_all(conn: sqlite3.Connection = None, cleanup: bool = True) -
         print(f"[Pipeline] 导入批次 {batch_idx}: {result_path}")
         result = import_results(result_path, conn)
         
-        total_imported += result.get('imported', 0)
-        total_failed += result.get('failed', 0)
-        
-        state['batches'][batch_idx]['status'] = 'imported'
-        state['batches'][batch_idx]['imported_count'] = result.get('imported', 0)
+        imported_count = int(result.get('imported', 0))
+        failed_count = int(result.get('failed', 0))
+        total_imported += imported_count
+        total_failed += failed_count
+
+        is_success = bool(result.get('success')) and imported_count > 0
+        if is_success:
+            state['batches'][batch_idx]['status'] = 'imported'
+            state['batches'][batch_idx]['imported_count'] = imported_count
+            state['batches'][batch_idx]['result_path'] = None
+        else:
+            state['batches'][batch_idx]['status'] = 'failed'
+            state['batches'][batch_idx]['error'] = {
+                'message': '导入失败或无有效记录',
+                'imported': imported_count,
+                'failed': failed_count
+            }
         save_pipeline_state(state)
         
-        # 清理文件节省空间
-        if cleanup and result.get('imported', 0) > 0:
+        # 清理文件节省空间（仅成功导入时清理）
+        if cleanup and is_success:
             # 删除 output 文件
             if os.path.exists(result_path):
                 os.remove(result_path)
@@ -1372,7 +1492,7 @@ def pipeline_run_full(conn: sqlite3.Connection = None, batch_size: int = 50000,
     运行完整流水线（自动循环直到全部完成）
     """
     if conn is None:
-        conn = sqlite3.connect(DB_PATH)
+        conn = db_connect(DB_PATH)
     
     config = load_config()
     
@@ -1465,7 +1585,7 @@ if __name__ == '__main__':
     
     args = parser.parse_args()
     
-    conn = sqlite3.connect(DB_PATH)
+    conn = db_connect(DB_PATH)
     config = load_config()
     
     # 单步操作
@@ -1482,7 +1602,7 @@ if __name__ == '__main__':
         print(f"batch_id: {batch_id}")
     
     elif args.status:
-        status = get_batch_status(args.status, config)
+        status = check_batch_status(args.status, config)
         print(f"状态: {json.dumps(status, indent=2, ensure_ascii=False)}")
     
     elif args.download:
@@ -1523,11 +1643,15 @@ if __name__ == '__main__':
         print(f"结果: {result}")
     
     elif args.pipeline_reset:
-        if os.path.exists(PIPELINE_STATE_FILE):
-            os.remove(PIPELINE_STATE_FILE)
-            print("流水线状态已重置")
+        removed_files = []
+        for state_file in (PIPELINE_STATE_DB, LEGACY_PIPELINE_STATE_FILE):
+            if os.path.exists(state_file):
+                os.remove(state_file)
+                removed_files.append(state_file)
+        if removed_files:
+            print(f"流水线状态已重置: {removed_files}")
         else:
-            print("没有流水线状态文件")
+            print("没有需要重置的流水线状态文件")
     
     elif args.run:
         result = run_batch_embedding(conn)
@@ -1535,5 +1659,307 @@ if __name__ == '__main__':
     
     else:
         parser.print_help()
-    
+
     conn.close()
+
+
+# ==========================================
+# 向量更新队列处理（模块间通信）
+# ==========================================
+
+def process_embedding_queue(conn: sqlite3.Connection = None, batch_size: int = 1000) -> Dict:
+    """
+    处理向量更新队列
+
+    从 embedding_update_queue 表中读取待处理记录，
+    批量生成向量并更新到 embeddings 表。
+
+    Args:
+        conn: 数据库连接，None 则自动创建
+        batch_size: 每批处理数量
+
+    Returns:
+        {'success': bool, 'processed': int, 'failed': int}
+    """
+    if conn is None:
+        conn = db_connect(DB_PATH)
+
+    cursor = conn.cursor()
+    claim_limit = min(max(int(batch_size), 1), 900)
+
+    # 确保 embeddings 表存在
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS embeddings (
+            di_code TEXT PRIMARY KEY,
+            embedding BLOB,
+            text_hash TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
+    # 兜底恢复：将长期处于 processing 的记录回退为 pending，避免异常退出导致队列卡死。
+    # 使用 claimed_at 判断是否超时，避免“老记录刚认领就被回收”。
+    if is_postgres_backend():
+        cursor.execute('''
+            UPDATE embedding_update_queue
+            SET status = 'pending',
+                claimed_at = NULL,
+                error_message = COALESCE(error_message, 'Recovered from stale processing')
+            WHERE status = 'processing'
+              AND COALESCE(claimed_at, created_at) < (CURRENT_TIMESTAMP - INTERVAL '2 hours')
+        ''')
+    else:
+        cursor.execute('''
+            UPDATE embedding_update_queue
+            SET status = 'pending',
+                claimed_at = NULL,
+                error_message = COALESCE(error_message, 'Recovered from stale processing')
+            WHERE status = 'processing'
+              AND COALESCE(claimed_at, created_at) < datetime('now', '-2 hours')
+        ''')
+    conn.commit()
+
+    # 原子认领队列：先在写事务中把 pending 标记为 processing，避免并发重复消费。
+    pending_items = []
+    try:
+        if is_postgres_backend():
+            conn.execute('BEGIN')
+        else:
+            conn.execute('BEGIN IMMEDIATE')
+        cursor.execute('''
+            SELECT id, di_code, action
+            FROM embedding_update_queue
+            WHERE status = 'pending'
+            ORDER BY created_at
+            LIMIT ?
+        ''', (claim_limit,))
+        candidates = cursor.fetchall()
+        if candidates:
+            candidate_ids = [row[0] for row in candidates]
+            placeholders = ','.join('?' for _ in candidate_ids)
+            cursor.execute(
+                f'''
+                UPDATE embedding_update_queue
+                SET status = 'processing',
+                    claimed_at = CURRENT_TIMESTAMP,
+                    processed_at = NULL,
+                    error_message = NULL
+                WHERE status = 'pending' AND id IN ({placeholders})
+                ''',
+                candidate_ids
+            )
+            cursor.execute(
+                f'''
+                SELECT id, di_code, action
+                FROM embedding_update_queue
+                WHERE status = 'processing' AND id IN ({placeholders})
+                ORDER BY created_at
+                ''',
+                candidate_ids
+            )
+            pending_items = cursor.fetchall()
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+
+    if not pending_items:
+        return {'success': True, 'processed': 0, 'failed': 0}
+
+    print(f"[Queue] 已原子认领 {len(pending_items)} 个向量更新任务")
+    claimed_ids = [row[0] for row in pending_items]
+
+    processed = 0
+    failed = 0
+
+    api_base, api_key, model = get_api_config()
+
+    for item_id, di_code, action in pending_items:
+        try:
+            # 获取产品信息
+            cursor.execute('''
+                SELECT di_code, product_name, model, description, scope
+                FROM products
+                WHERE di_code = ?
+            ''', (di_code,))
+
+            row = cursor.fetchone()
+            if not row:
+                # 产品不存在，标记为失败
+                cursor.execute('''
+                    UPDATE embedding_update_queue
+                    SET status = 'failed', processed_at = CURRENT_TIMESTAMP,
+                        error_message = 'Product not found'
+                    WHERE id = ?
+                ''', (item_id,))
+                failed += 1
+                continue
+
+            product = {
+                'di_code': row[0],
+                'product_name': row[1],
+                'model': row[2],
+                'description': row[3],
+                'scope': row[4]
+            }
+
+            text = build_product_text(product)
+            text_hash = compute_text_hash(text)
+
+            if not text.strip():
+                # 空文本，跳过
+                cursor.execute('''
+                    UPDATE embedding_update_queue
+                    SET status = 'completed', processed_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                ''', (item_id,))
+                processed += 1
+                continue
+
+            # 检查是否需要更新（对比哈希）
+            cursor.execute('SELECT text_hash, embedding FROM embeddings WHERE di_code = ?', (di_code,))
+            existing = cursor.fetchone()
+
+            if existing and existing[0] == text_hash and existing[1] is not None:
+                # 内容未变更，直接标记完成
+                cursor.execute('''
+                    UPDATE embedding_update_queue
+                    SET status = 'completed', processed_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                ''', (item_id,))
+                processed += 1
+                continue
+
+            # 调用 API 生成向量（简化版：同步调用）
+            if api_base and api_key:
+                try:
+                    url = f"{api_base}/embeddings"
+                    headers = {
+                        'Authorization': f'Bearer {api_key}',
+                        'Content-Type': 'application/json'
+                    }
+                    payload = {
+                        "model": model,
+                        "input": text
+                    }
+
+                    response = requests.post(url, headers=headers, json=payload, timeout=60)
+                    response.raise_for_status()
+
+                    data = response.json()
+                    embedding = data.get('data', [{}])[0].get('embedding')
+
+                    if embedding:
+                        # 保存向量
+                        blob = vector_to_blob(embedding)
+                        cursor.execute('''
+                            INSERT OR REPLACE INTO embeddings (di_code, embedding, text_hash)
+                            VALUES (?, ?, ?)
+                        ''', (di_code, blob, text_hash))
+
+                        # 标记队列完成
+                        cursor.execute('''
+                            UPDATE embedding_update_queue
+                            SET status = 'completed', processed_at = CURRENT_TIMESTAMP
+                            WHERE id = ?
+                        ''', (item_id,))
+
+                        processed += 1
+
+                        if processed % 100 == 0:
+                            conn.commit()
+                            print(f"[Queue] 已处理 {processed}/{len(pending_items)}")
+                    else:
+                        raise Exception("Empty embedding response")
+
+                except requests.exceptions.HTTPError as e:
+                    # 检测余额不足错误
+                    is_insufficient_balance = False
+                    error_msg = str(e)
+
+                    if hasattr(e, 'response') and e.response is not None:
+                        status_code = e.response.status_code
+                        try:
+                            error_data = e.response.json()
+                            error_code = error_data.get('code', '')
+                            error_info = error_data.get('error', {}).get('message', '') if isinstance(error_data.get('error'), dict) else str(error_data)
+
+                            # 阿里云余额不足错误码: 402, InsufficientBalance, InvalidApiKey
+                            if (status_code == 402 or
+                                'InsufficientBalance' in error_code or
+                                '余额不足' in str(error_data) or
+                                'insufficient balance' in error_info.lower() or
+                                'InvalidApiKey' in error_code):
+                                is_insufficient_balance = True
+                                error_msg = f"余额不足或API密钥无效: {error_code}"
+                        except:
+                            # 解析失败，检查状态码和文本
+                            if status_code == 402:
+                                is_insufficient_balance = True
+                                error_msg = "余额不足 (HTTP 402)"
+
+                    if is_insufficient_balance:
+                        print(f"[Queue] ⚠️ 检测到余额不足，暂停向量化处理: {di_code}")
+                        for start in range(0, len(claimed_ids), 900):
+                            chunk_ids = claimed_ids[start:start + 900]
+                            placeholders = ','.join('?' for _ in chunk_ids)
+                            cursor.execute(
+                                f'''
+                                UPDATE embedding_update_queue
+                                SET status = 'pending',
+                                    claimed_at = NULL,
+                                    processed_at = NULL,
+                                    error_message = ?
+                                WHERE status = 'processing' AND id IN ({placeholders})
+                                ''',
+                                [error_msg] + chunk_ids
+                            )
+                        # 跳出循环，不再处理后续记录
+                        conn.commit()
+                        print(f"[Queue] ⚠️ 余额不足，已暂停处理。剩余 {len(pending_items) - processed - 1} 条记录将保留在队列中")
+                        return {
+                            'success': False,
+                            'processed': processed,
+                            'failed': failed,
+                            'error': 'INSUFFICIENT_BALANCE',
+                            'error_message': error_msg
+                        }
+                    else:
+                        # 其他错误，正常标记为失败
+                        print(f"[Queue] 生成向量失败 {di_code}: {e}")
+                        cursor.execute('''
+                            UPDATE embedding_update_queue
+                            SET status = 'failed', processed_at = CURRENT_TIMESTAMP,
+                                error_message = ?
+                            WHERE id = ?
+                        ''', (error_msg[:200], item_id))
+                        failed += 1
+            else:
+                # 无 API 配置，标记为失败
+                cursor.execute('''
+                    UPDATE embedding_update_queue
+                    SET status = 'failed', processed_at = CURRENT_TIMESTAMP,
+                        error_message = 'API not configured'
+                    WHERE id = ?
+                ''', (item_id,))
+                failed += 1
+
+        except Exception as e:
+            print(f"[Queue] 处理失败 {di_code}: {e}")
+            cursor.execute('''
+                UPDATE embedding_update_queue
+                SET status = 'failed', processed_at = CURRENT_TIMESTAMP,
+                    error_message = ?
+                WHERE id = ?
+            ''', (str(e)[:200], item_id))
+            failed += 1
+
+    conn.commit()
+    print(f"[Queue] 处理完成: 成功 {processed}, 失败 {failed}")
+
+    return {
+        'success': failed == 0,
+        'partial': processed > 0 and failed > 0,
+        'processed': processed,
+        'failed': failed
+    }

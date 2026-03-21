@@ -1,0 +1,53 @@
+========================================
+  UDID 医疗器械智能查询系统
+========================================
+
+正在启动服务...
+
+[1/4] 清理占用端口...
+  ✓ 端口 8080 未被占用
+  ✓ 端口 8888 未被占用
+
+[2/4] 检查 Python 虚拟环境...
+  ✓ 虚拟环境已激活
+
+[3/4] 加载环境变量...
+  ✓ 已加载 .env
+  ✓ 数据库后端: postgres
+
+[4/4] 启动主服务...
+服务地址: http://localhost:8080
+按 Ctrl+C 停止服务
+
+==================================================
+UDID 医疗器械查询系统 - 后端服务
+==================================================
+数据库路径: /Users/zhaozengqing/github/AI/test/高新医疗/udid_hybrid_lake.db
+配置文件路径: /Users/zhaozengqing/github/AI/test/高新医疗/config.json
+API 端点:
+  GET  /api/stats    - 数据库统计
+  GET  /api/search   - 搜索产品
+  POST /api/upload   - 上传 XML
+  POST /api/sync     - 同步数据
+  POST /api/ai-match - AI 匹配
+  GET/POST /api/config - 配置管理
+==================================================
+访问地址: http://localhost:8080
+==================================================
+ * Serving Flask app 'udid_server'
+ * Debug mode: off
+[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8080
+ * Running on http://198.18.0.1:8080
+[33mPress CTRL+C to quit[0m
+127.0.0.1 - - [02/Mar/2026 11:20:34] "GET /api/stats HTTP/1.1" 200 -
+127.0.0.1 - - [02/Mar/2026 11:20:34] "POST /api/auth/login HTTP/1.1" 200 -
+127.0.0.1 - - [02/Mar/2026 11:20:34] "GET /api/admin/users HTTP/1.1" 200 -
+127.0.0.1 - - [02/Mar/2026 11:20:34] "POST /api/admin/users HTTP/1.1" 200 -
+127.0.0.1 - - [02/Mar/2026 11:20:34] "GET /api/admin/users HTTP/1.1" 200 -
+127.0.0.1 - - [02/Mar/2026 11:20:34] "PATCH /api/admin/users/2 HTTP/1.1" 200 -
+127.0.0.1 - - [02/Mar/2026 11:20:34] "PATCH /api/admin/users/2 HTTP/1.1" 200 -
+127.0.0.1 - - [02/Mar/2026 11:20:34] "GET /api/admin/users HTTP/1.1" 200 -
+127.0.0.1 - - [02/Mar/2026 11:20:34] "DELETE /api/admin/users/2 HTTP/1.1" 200 -
+127.0.0.1 - - [02/Mar/2026 11:20:34] "POST /api/auth/logout HTTP/1.1" 200 -

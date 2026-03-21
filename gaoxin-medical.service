@@ -1,0 +1,38 @@
+[Unit]
+Description=高新医疗UDID查询系统
+After=network.target
+
+[Service]
+Type=simple
+User=gaoxin
+Group=gaoxin
+WorkingDirectory=/opt/gaoxin_medical
+Environment=PATH=/opt/gaoxin_medical/venv/bin
+Environment=PYTHONPATH=/opt/gaoxin_medical
+EnvironmentFile=-/opt/gaoxin_medical/.env
+
+# 安全加固
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/gaoxin_medical/data /opt/gaoxin_medical/logs /var/log/gaoxin_medical
+
+# Gunicorn配置
+ExecStart=/opt/gaoxin_medical/venv/bin/gunicorn \
+    -w 4 \
+    -k sync \
+    -b 127.0.0.1:8080 \
+    --timeout 120 \
+    --access-logfile /var/log/gaoxin_medical/access.log \
+    --error-logfile /var/log/gaoxin_medical/error.log \
+    --capture-output \
+    --enable-stdio-inheritance \
+    udid_server:app
+ExecReload=/bin/kill -HUP $MAINPID
+
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

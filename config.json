@@ -1,8 +1,13 @@
 {
-  "api_base_url": "https://api.kksj.org/v1",
-  "api_key": "sk-AeX2bltbBW6X60k1SZKxIvt5umHPeldJUixFnsTd0mR8QN8R",
-  "model": "gemini-3-flash-preview",
+  "_comment": "请使用 .env 文件配置 API 密钥，此文件仅用于非敏感配置",
+  "api_base_url": "https://api.openai.com/v1",
+  "model": "gpt-4o-mini",
   "embedding_api_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-  "embedding_api_key": "sk-2eaea4a587724f7f8c7676ab907c26b7",
-  "embedding_model": "text-embedding-v4"
+  "embedding_model": "text-embedding-v3",
+  "embedding_dim": 1024,
+  "embedding_batch_size": 10,
+  "ai_min_score": 0,
+  "ai_retry_count": 1,
+  "ai_retry_backoff_sec": 1.0,
+  "ai_cache_ttl_sec": 300
 }

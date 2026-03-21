@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>UDID 管理后台</title>
+    <title>高新医疗科技有限公司 - 管理后台</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;500;600;700&family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="/tailwindcss.cdn.js"></script>
     <script>
         tailwind.config = {
             theme: {
@@ -57,6 +57,122 @@
         input, select, textarea { width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid #E2E8F0; font-size: 13px; outline: none; }
         input:focus, select:focus, textarea:focus { border-color: #0891B2; box-shadow: 0 0 0 3px rgba(8, 145, 178, 0.12); }
         label { font-size: 12px; color: #64748B; display: block; margin-bottom: 6px; }
+        .workspace-shell { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 24px; }
+        .workspace-tab {
+            width: 100%;
+            border: 1px solid #E2E8F0;
+            background: #FFFFFF;
+            color: #334155;
+            border-radius: 12px;
+            padding: 12px 14px;
+            text-align: left;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.2s ease;
+            cursor: pointer;
+        }
+        .workspace-tab:hover { border-color: #0891B2; color: #0E7490; }
+        .workspace-tab.active {
+            border-color: #0891B2;
+            color: #0E7490;
+            background: linear-gradient(135deg, #ECFEFF 0%, #F0FDF4 100%);
+            box-shadow: 0 6px 20px rgba(8, 145, 178, 0.14);
+        }
+        .workspace-section { display: none; }
+        .workspace-section.active { display: block; }
+        .hint-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border-radius: 999px;
+            font-size: 11px;
+            padding: 5px 10px;
+            font-weight: 600;
+            color: #0F766E;
+            background: #CCFBF1;
+        }
+        .task-step {
+            border: 1px solid #E2E8F0;
+            border-radius: 12px;
+            padding: 12px;
+            background: #FFFFFF;
+        }
+        .task-step .step-index {
+            width: 22px;
+            height: 22px;
+            border-radius: 999px;
+            background: #E0F2FE;
+            color: #0369A1;
+            font-size: 12px;
+            font-weight: 700;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 8px;
+        }
+        @media (max-width: 1024px) {
+            .workspace-shell { grid-template-columns: 1fr; }
+            .workspace-nav {
+                position: static !important;
+            }
+            .workspace-nav-tabs {
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 10px;
+            }
+        }
+        @media (max-width: 640px) {
+            .workspace-nav-tabs { grid-template-columns: 1fr; }
+        }
+
+        /* 同步阶段样式 */
+        .sync-stage-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-width: 50px;
+            opacity: 0.4;
+            transition: all 0.3s ease;
+        }
+        .sync-stage-item.active {
+            opacity: 1;
+            transform: scale(1.1);
+        }
+        .sync-stage-item.completed {
+            opacity: 0.8;
+        }
+        .sync-stage-item .stage-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: #E2E8F0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            margin-bottom: 4px;
+        }
+        .sync-stage-item.active .stage-icon {
+            background: #0891B2;
+            color: white;
+        }
+        .sync-stage-item.completed .stage-icon {
+            background: #059669;
+            color: white;
+        }
+        .sync-stage-item .stage-name {
+            font-size: 10px;
+            color: #64748B;
+            text-align: center;
+        }
+        .sync-stage-item.active .stage-name {
+            color: #0891B2;
+            font-weight: 600;
+        }
+        .stage-arrow {
+            color: #CBD5E1;
+            font-size: 14px;
+        }
     </style>
 </head>
 <body class="bg-surface min-h-screen">
@@ -70,8 +186,8 @@
                         </svg>
                     </div>
                     <div>
-                        <h1 class="text-lg font-heading font-semibold text-text">UDID 管理后台</h1>
-                        <p class="text-xs text-text-muted">系统管理 · 数据配置</p>
+                        <h1 class="text-lg font-heading font-semibold text-text">高新医疗科技有限公司</h1>
+                        <p class="text-xs text-text-muted">后台操作中心</p>
                     </div>
                 </div>
                 <div class="flex items-center gap-3">
@@ -85,7 +201,7 @@
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                         </svg>
-                        查询系统
+                        打开查询页
                     </button>
                     <button onclick="logout()" class="flex items-center gap-2 px-4 py-2 text-sm bg-red-500 hover:bg-red-600 text-white rounded-xl transition-colors cursor-pointer">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -99,269 +215,518 @@
     </header>
 
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <section class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-            <div class="bg-white rounded-2xl p-6 border border-border card-shadow">
-                <div class="flex items-center justify-between mb-3">
-                    <span class="text-text-muted text-sm">产品总数</span>
-                    <div class="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center">
-                        <svg class="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                        </svg>
+        <div class="workspace-shell">
+            <aside class="workspace-nav lg:sticky lg:top-24 self-start space-y-4">
+                <div class="bg-white rounded-2xl p-5 border border-border card-shadow">
+                    <p class="text-xs text-text-light uppercase tracking-wide">常用操作</p>
+                    <h2 class="mt-2 text-lg font-heading font-semibold text-text">按步骤处理后台事务</h2>
+                    <p class="text-sm text-text-muted mt-2">把页面分成 5 个区域，每次只进入一个区域处理一件事。</p>
+                    <div class="workspace-nav-tabs space-y-2 mt-4">
+                        <button type="button" class="workspace-tab active" data-section-target="overview">先看状态</button>
+                        <button type="button" class="workspace-tab" data-section-target="operations">更新数据</button>
+                        <button type="button" class="workspace-tab" data-section-target="config">智能设置</button>
+                        <button type="button" class="workspace-tab" data-section-target="users">账号管理</button>
+                        <button type="button" class="workspace-tab" data-section-target="audit">操作记录</button>
                     </div>
                 </div>
-                <div class="text-3xl font-heading font-bold text-text" id="statProducts">--</div>
-                <p class="text-xs text-text-light mt-1" id="statUpdated">最后同步：--</p>
-            </div>
-            <div class="bg-white rounded-2xl p-6 border border-border card-shadow">
-                <div class="flex items-center justify-between mb-3">
-                    <span class="text-text-muted text-sm">向量覆盖率</span>
-                    <div class="w-10 h-10 bg-accent/10 rounded-xl flex items-center justify-center">
-                        <svg class="w-5 h-5 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                        </svg>
+                <div class="bg-white rounded-2xl p-5 border border-border card-shadow">
+                    <span class="hint-pill">推荐步骤</span>
+                    <div class="space-y-2 mt-3">
+                        <div class="task-step">
+                            <p class="text-sm text-text">
+                                <span class="step-index">1</span>先确认下面 3 个关键数字是否正常
+                            </p>
+                        </div>
+                        <div class="task-step">
+                            <p class="text-sm text-text">
+                                <span class="step-index">2</span>需要更新时，点击开始同步并等待完成
+                            </p>
+                            <button class="text-xs text-primary hover:underline mt-1" onclick="switchAdminSection('operations')">去更新数据</button>
+                        </div>
+                        <div class="task-step">
+                            <p class="text-sm text-text">
+                                <span class="step-index">3</span>如果智能搜索异常，再检查智能服务设置
+                            </p>
+                            <button class="text-xs text-primary hover:underline mt-1" onclick="switchAdminSection('config')">去智能设置</button>
+                        </div>
                     </div>
                 </div>
-                <div class="text-3xl font-heading font-bold text-text" id="statEmbedding">--</div>
-                <p class="text-xs text-text-light mt-1" id="statEmbeddingCount">--</p>
-            </div>
-            <div class="bg-white rounded-2xl p-6 border border-border card-shadow">
-                <div class="flex items-center justify-between mb-3">
-                    <span class="text-text-muted text-sm">企业数量</span>
-                    <div class="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
-                        <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                        </svg>
-                    </div>
-                </div>
-                <div class="text-3xl font-heading font-bold text-text" id="statManufacturers">--</div>
-                <p class="text-xs text-text-light mt-1">数据湖概览</p>
-            </div>
-        </section>
+            </aside>
 
-        <section class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-            <div class="bg-white rounded-2xl p-6 border border-border card-shadow">
-                <h3 class="text-lg font-heading font-semibold text-text mb-4 flex items-center gap-2">
-                    <svg class="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                    系统操作
-                </h3>
-                <div class="flex flex-wrap gap-3 mb-4">
-                    <button class="btn" onclick="triggerSync()">同步数据</button>
-                    <button class="btn secondary" onclick="testEmbedding()">测试 Embedding</button>
-                    <button class="btn secondary" onclick="testAI()">测试 AI</button>
-                </div>
-                <p class="muted mb-4" id="opsStatus">等待操作</p>
-                
-                <div class="border-t border-border pt-4">
-                    <h4 class="text-sm font-semibold text-text mb-2">向量索引</h4>
-                    <p class="muted mb-3" id="embeddingPending">待处理: --</p>
-                    <div class="flex gap-3">
-                        <button class="btn" id="btnBuildIndex" onclick="buildIndex()">构建索引</button>
-                        <button class="btn secondary" id="btnImportResult" onclick="importResult()" style="display:none;">导入结果</button>
+            <div class="space-y-6">
+                <section class="workspace-section active" data-section="overview">
+                    <div class="bg-white rounded-2xl p-6 border border-border card-shadow mb-6">
+                        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div>
+                                <h2 class="text-xl font-heading font-semibold text-text">先看这里</h2>
+                                <p class="text-sm text-text-muted">只看这 3 个数字，就能快速判断系统现在是不是正常。</p>
+                            </div>
+                            <div class="flex gap-2">
+                                <button class="btn secondary" onclick="switchAdminSection('operations')">去更新数据</button>
+                                <button class="btn secondary" onclick="switchAdminSection('config')">去智能设置</button>
+                            </div>
+                        </div>
                     </div>
-                </div>
-                
-                <div id="progressArea" style="display:none;" class="mt-4 p-4 bg-surface rounded-xl">
-                    <div class="flex items-center gap-3 mb-3">
-                        <div class="spinner" id="progressSpinner"></div>
-                        <span id="progressStep" class="text-sm text-text">准备中...</span>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                        <div class="bg-white rounded-2xl p-6 border border-border card-shadow">
+                            <div class="flex items-center justify-between mb-3">
+                                <span class="text-text-muted text-sm">产品总数</span>
+                                <div class="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center">
+                                    <svg class="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                                    </svg>
+                                </div>
+                            </div>
+                            <div class="text-3xl font-heading font-bold text-text" id="statProducts">--</div>
+                            <p class="text-xs text-text-light mt-1" id="statUpdated">最后同步：--</p>
+                        </div>
+                        <div class="bg-white rounded-2xl p-6 border border-border card-shadow">
+                            <div class="flex items-center justify-between mb-3">
+                                <span class="text-text-muted text-sm">智能搜索准备度</span>
+                                <div class="w-10 h-10 bg-accent/10 rounded-xl flex items-center justify-center">
+                                    <svg class="w-5 h-5 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                                    </svg>
+                                </div>
+                            </div>
+                            <div class="text-3xl font-heading font-bold text-text" id="statEmbedding">--</div>
+                            <p class="text-xs text-text-light mt-1" id="statEmbeddingCount">--</p>
+                        </div>
+                        <div class="bg-white rounded-2xl p-6 border border-border card-shadow">
+                            <div class="flex items-center justify-between mb-3">
+                                <span class="text-text-muted text-sm">企业数量</span>
+                                <div class="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
+                                    <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                                    </svg>
+                                </div>
+                            </div>
+                            <div class="text-3xl font-heading font-bold text-text" id="statManufacturers">--</div>
+                            <p class="text-xs text-text-light mt-1">数据湖概览</p>
+                        </div>
                     </div>
-                    <div class="progress-bar">
-                        <div class="progress-fill" id="progressFill" style="width:0%"></div>
+                    <div class="bg-white rounded-2xl p-6 border border-border card-shadow">
+                        <h3 class="text-lg font-heading font-semibold text-text mb-3">今天最常用的 3 个操作</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                            <button class="btn" onclick="switchAdminSection('operations')">更新数据和智能索引</button>
+                            <button class="btn secondary" onclick="switchAdminSection('config')">检查智能服务设置</button>
+                            <button class="btn secondary" onclick="switchAdminSection('users')">新增或管理账号</button>
+                        </div>
                     </div>
-                    <div class="flex justify-between mt-2 text-xs text-text-muted">
-                        <span id="progressDetail">0 / 0</span>
-                        <span id="progressTime">已用时: 0分0秒</span>
-                    </div>
-                </div>
-            </div>
-            <div class="bg-white rounded-2xl p-6 border border-border card-shadow">
-                <h3 class="text-lg font-heading font-semibold text-text mb-4 flex items-center gap-2">
-                    <svg class="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                    </svg>
-                    上传 XML
-                </h3>
-                <div class="border-2 border-dashed border-border rounded-xl p-6 text-center hover:border-primary transition-colors cursor-pointer" onclick="document.getElementById('xmlFile').click()">
-                    <svg class="w-10 h-10 mx-auto text-text-light mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                    <p class="text-sm text-text-muted">点击选择 XML 文件</p>
-                    <input type="file" id="xmlFile" accept=".xml" class="hidden" />
-                </div>
-                <button class="btn w-full mt-4" onclick="uploadXml()">上传并导入</button>
-                <p class="muted mt-3 text-center" id="uploadStatus">支持增量导入</p>
-            </div>
-        </section>
+                </section>
 
-        <section class="bg-white rounded-2xl p-6 border border-border card-shadow mb-6">
-            <h3 class="text-lg font-heading font-semibold text-text mb-2 flex items-center gap-2">
-                <svg class="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-                API 配置
-            </h3>
-            <p class="text-sm text-text-muted mb-6">配置 AI 对话和向量嵌入服务。支持阿里云 DashScope、OpenAI 及兼容 API。</p>
-            
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div class="bg-surface rounded-xl p-5">
-                    <h4 class="text-sm font-semibold text-text mb-3 flex items-center gap-2">
-                        <div class="w-6 h-6 bg-primary/10 rounded-lg flex items-center justify-center">
-                            <svg class="w-3.5 h-3.5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                <section class="workspace-section" data-section="operations">
+                    <div class="bg-white rounded-2xl p-6 border border-border card-shadow mb-6">
+                        <h2 class="text-xl font-heading font-semibold text-text">更新数据</h2>
+                        <p class="text-sm text-text-muted mt-1">日常只需要在这里更新数据、生成智能搜索能力，必要时再手动导入 XML 文件。</p>
+                    </div>
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div class="bg-white rounded-2xl p-6 border border-border card-shadow">
+                            <h3 class="text-lg font-heading font-semibold text-text mb-4 flex items-center gap-2">
+                                <svg class="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                </svg>
+                                一键更新
+                            </h3>
+                            <div class="flex flex-wrap gap-3 mb-4">
+                                <button class="btn" onclick="triggerSync()">开始同步</button>
+                                <button class="btn secondary" onclick="testEmbedding()">测试智能搜索</button>
+                                <button class="btn secondary" onclick="testAI()">测试问答服务</button>
+                            </div>
+                            <p class="muted mb-4" id="opsStatus">还没有开始操作</p>
+
+                            <div class="border-t border-border pt-4 mt-4">
+                                <div class="flex items-center justify-between mb-3">
+                                    <h4 class="text-sm font-semibold text-text">更新进度</h4>
+                                    <button onclick="toggleSyncMonitor()" class="text-xs text-primary hover:underline">
+                                        显示/隐藏详情
+                                    </button>
+                                </div>
+
+                                <div class="grid grid-cols-3 gap-3 mb-3">
+                                    <div class="bg-surface p-3 rounded-lg text-center">
+                                        <div class="text-xs text-text-muted">产品总数</div>
+                                        <div class="text-lg font-semibold text-primary" id="syncTotalProducts">--</div>
+                                    </div>
+                                    <div class="bg-surface p-3 rounded-lg text-center">
+                                        <div class="text-xs text-text-muted">向量覆盖</div>
+                                        <div class="text-lg font-semibold text-accent" id="syncVectorCoverage">--</div>
+                                    </div>
+                                    <div class="bg-surface p-3 rounded-lg text-center">
+                                        <div class="text-xs text-text-muted">最后同步</div>
+                                        <div class="text-sm font-medium text-text" id="syncLastTime">--</div>
+                                    </div>
+                                </div>
+
+                                <p class="muted mb-3" id="syncStatusText">点击开始同步后，系统会自动下载并更新最新数据</p>
+                                <div class="flex gap-3 mb-3">
+                                    <button class="btn flex-1" id="btnStartSync" onclick="triggerSync()">开始同步</button>
+                                    <button class="btn bg-red-500 hover:bg-red-600 flex-1 hidden" id="btnStopSync" onclick="stopSync()">停止同步</button>
+                                </div>
+
+                                <div id="syncStagesPanel" style="display:none;" class="mb-4 p-4 bg-surface rounded-xl border border-border">
+                                    <div class="flex items-center justify-between text-xs mb-2">
+                                        <span class="text-text-muted">同步阶段</span>
+                                        <span id="syncStageBadge" class="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full">准备中</span>
+                                    </div>
+                                    <div class="flex items-center gap-2 overflow-x-auto pb-2">
+                                        <div class="sync-stage-item" data-stage="preparing">
+                                            <div class="stage-icon">⏳</div>
+                                            <div class="stage-name">准备</div>
+                                        </div>
+                                        <div class="stage-arrow">→</div>
+                                        <div class="sync-stage-item" data-stage="checking">
+                                            <div class="stage-icon">🔍</div>
+                                            <div class="stage-name">检查</div>
+                                        </div>
+                                        <div class="stage-arrow">→</div>
+                                        <div class="sync-stage-item" data-stage="downloading">
+                                            <div class="stage-icon">⬇️</div>
+                                            <div class="stage-name">下载</div>
+                                        </div>
+                                        <div class="stage-arrow">→</div>
+                                        <div class="sync-stage-item" data-stage="importing">
+                                            <div class="stage-icon">💾</div>
+                                            <div class="stage-name">导入</div>
+                                        </div>
+                                        <div class="stage-arrow">→</div>
+                                        <div class="sync-stage-item" data-stage="vectors">
+                                            <div class="stage-icon">🔢</div>
+                                            <div class="stage-name">向量</div>
+                                        </div>
+                                        <div class="stage-arrow">→</div>
+                                        <div class="sync-stage-item" data-stage="completed">
+                                            <div class="stage-icon">✅</div>
+                                            <div class="stage-name">完成</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div id="syncProgressPanel" style="display:none;" class="mb-4 p-4 bg-blue-50 rounded-xl">
+                                    <div class="flex justify-between items-center mb-2">
+                                        <span class="font-semibold text-sm text-blue-800" id="syncStageText">准备同步...</span>
+                                        <span class="text-sm text-blue-600 font-medium" id="syncPercent">0%</span>
+                                    </div>
+                                    <div class="progress-bar">
+                                        <div class="progress-fill" id="syncProgressBar" style="width: 0%"></div>
+                                    </div>
+                                    <div class="flex justify-between mt-2 text-xs text-blue-600">
+                                        <span id="syncDetail">0 / 0</span>
+                                        <span id="syncTime">已用: 0分0秒 | 预计剩余: --</span>
+                                    </div>
+                                    <div id="syncCurrentFile" class="mt-2 text-xs text-blue-600 truncate"></div>
+                                </div>
+
+                                <div id="syncMonitorDetail" style="display:none;">
+                                    <div class="bg-gray-900 rounded-lg p-3 mb-3">
+                                        <div class="flex items-center justify-between mb-2">
+                                            <span class="text-xs text-gray-400">实时日志</span>
+                                            <button onclick="refreshSyncStatus()" class="text-xs text-primary hover:underline">刷新</button>
+                                        </div>
+                                        <div id="syncLogContainer" class="h-32 overflow-y-auto text-xs font-mono space-y-1">
+                                            <div class="text-gray-500">等待同步开始...</div>
+                                        </div>
+                                    </div>
+
+                                    <div id="syncHistoryPanel" class="mt-3">
+                                        <h5 class="text-xs font-semibold text-text-muted mb-2">同步历史</h5>
+                                        <div id="syncHistoryList" class="text-xs space-y-1 max-h-32 overflow-y-auto">
+                                            <div class="text-center py-2 text-text-light">加载中...</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="border-t border-border pt-4 mt-4">
+                                <h4 class="text-sm font-semibold text-text mb-2">智能搜索数据</h4>
+                                <p class="muted mb-3" id="embeddingPending">待处理: --</p>
+                                <div class="flex gap-3">
+                                    <button class="btn" id="btnBuildIndex" onclick="buildIndex()">生成智能索引</button>
+                                    <button class="btn secondary" id="btnImportResult" onclick="importResult()" style="display:none;">导入结果</button>
+                                </div>
+                            </div>
+
+                            <div id="progressArea" style="display:none;" class="mt-4 p-4 bg-surface rounded-xl">
+                                <div class="flex items-center gap-3 mb-3">
+                                    <div class="spinner" id="progressSpinner"></div>
+                                    <span id="progressStep" class="text-sm text-text">准备中...</span>
+                                </div>
+                                <div class="progress-bar">
+                                    <div class="progress-fill" id="progressFill" style="width:0%"></div>
+                                </div>
+                                <div class="flex justify-between mt-2 text-xs text-text-muted">
+                                    <span id="progressDetail">0 / 0</span>
+                                    <span id="progressTime">已用时: 0分0秒</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bg-white rounded-2xl p-6 border border-border card-shadow">
+                            <h3 class="text-lg font-heading font-semibold text-text mb-4 flex items-center gap-2">
+                                <svg class="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                                </svg>
+                                手动导入数据文件
+                            </h3>
+                            <div class="border-2 border-dashed border-border rounded-xl p-6 text-center hover:border-primary transition-colors cursor-pointer" onclick="document.getElementById('xmlFile').click()">
+                                <svg class="w-10 h-10 mx-auto text-text-light mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                                <p class="text-sm text-text-muted">点击选择 XML 数据文件</p>
+                                <input type="file" id="xmlFile" accept=".xml" class="hidden" />
+                            </div>
+                            <button class="btn w-full mt-4" onclick="uploadXml()">上传并导入文件</button>
+                            <p class="muted mt-3 text-center" id="uploadStatus">支持 XML 增量文件导入</p>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="workspace-section" data-section="config">
+                    <div class="bg-white rounded-2xl p-6 border border-border card-shadow mb-6">
+                        <h2 class="text-xl font-heading font-semibold text-text">智能服务设置</h2>
+                        <p class="text-sm text-text-muted mt-1">如果智能搜索或问答功能异常，在这里检查连接参数。</p>
+                    </div>
+                    <section class="bg-white rounded-2xl p-6 border border-border card-shadow">
+                        <h3 class="text-lg font-heading font-semibold text-text mb-2 flex items-center gap-2">
+                            <svg class="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                             </svg>
-                        </div>
-                        AI 对话服务
-                    </h4>
-                    <div class="space-y-3">
-                        <div>
-                            <label>API Base URL</label>
-                            <input id="configApiUrl" placeholder="https://dashscope.aliyuncs.com/compatible-mode/v1" />
-                        </div>
-                        <div>
-                            <label>API Key (留空则不改)</label>
-                            <input id="configApiKey" type="password" placeholder="sk-xxxxxxxx" />
-                        </div>
-                        <div>
-                            <label>模型名称</label>
-                            <input id="configModel" placeholder="qwen-plus" />
-                            <p class="text-xs text-text-light mt-1">推荐: qwen-plus, qwen-turbo, qwen-max</p>
-                        </div>
-                        <button class="btn secondary w-full" onclick="testAIConfig()">测试 AI 连接</button>
-                    </div>
-                </div>
-                
-                <div class="bg-blue-50 rounded-xl p-5">
-                    <h4 class="text-sm font-semibold text-text mb-3 flex items-center gap-2">
-                        <div class="w-6 h-6 bg-blue-100 rounded-lg flex items-center justify-center">
-                            <svg class="w-3.5 h-3.5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
-                            </svg>
-                        </div>
-                        向量嵌入服务
-                    </h4>
-                    <div class="space-y-3">
-                        <div>
-                            <label>Embedding API URL</label>
-                            <input id="configEmbeddingApiUrl" placeholder="https://dashscope.aliyuncs.com/compatible-mode/v1" class="bg-white" />
-                        </div>
-                        <div>
-                            <label>Embedding API Key (留空则不改)</label>
-                            <input id="configEmbeddingApiKey" type="password" placeholder="sk-xxxxxxxx" class="bg-white" />
-                        </div>
-                        <div>
-                            <label>Embedding 模型</label>
-                            <input id="configEmbeddingModel" placeholder="text-embedding-v3" class="bg-white" />
-                            <p class="text-xs text-text-light mt-1">推荐: text-embedding-v3, text-embedding-v4</p>
-                        </div>
-                        <button class="btn secondary w-full" onclick="testEmbeddingConfig()">测试 Embedding 连接</button>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="flex justify-between items-center mt-6 pt-6 border-t border-border">
-                <button class="btn" onclick="saveConfig()">保存所有配置</button>
-                <button class="btn secondary" onclick="showConfigHelp()">配置帮助</button>
-            </div>
-        </section>
-        
-        <section class="bg-white rounded-2xl p-6 border border-border card-shadow mb-6">
-            <h3 class="text-lg font-heading font-semibold text-text mb-4 flex items-center gap-2">
-                <svg class="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                </svg>
-                用户管理
-            </h3>
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-                <div>
-                    <label>用户名</label>
-                    <input id="newUserName" placeholder="请输入用户名" />
-                </div>
-                <div>
-                    <label>密码</label>
-                    <input id="newUserPassword" type="password" placeholder="请输入密码" />
-                </div>
-                <div>
-                    <label>角色</label>
-                    <select id="newUserRole">
-                        <option value="user">普通用户</option>
-                        <option value="admin">管理员</option>
-                    </select>
-                </div>
-                <div class="flex items-end">
-                    <button class="btn w-full" onclick="createUser()">新增用户</button>
-                </div>
-            </div>
-            <div class="overflow-x-auto rounded-xl border border-border">
-                <table>
-                    <thead class="bg-surface">
-                        <tr>
-                            <th>账号</th>
-                            <th>角色</th>
-                            <th>状态</th>
-                            <th>最近登录</th>
-                            <th>操作</th>
-                        </tr>
-                    </thead>
-                    <tbody id="usersTable"></tbody>
-                </table>
-            </div>
-        </section>
+                            服务连接设置
+                        </h3>
+                        <p class="text-sm text-text-muted mb-6">统一管理问答服务和智能搜索服务的连接参数。</p>
 
-        <section class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-            <div class="bg-white rounded-2xl p-6 border border-border card-shadow">
-                <h3 class="text-lg font-heading font-semibold text-text mb-4 flex items-center gap-2">
-                    <svg class="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                    </svg>
-                    安全审计
-                </h3>
-                <div class="overflow-auto max-h-64 rounded-xl border border-border">
-                    <table>
-                        <thead class="bg-surface sticky top-0">
-                            <tr>
-                                <th>时间</th>
-                                <th>用户</th>
-                                <th>动作</th>
-                                <th>IP</th>
-                            </tr>
-                        </thead>
-                        <tbody id="auditTable"></tbody>
-                    </table>
-                </div>
-            </div>
-            <div class="bg-white rounded-2xl p-6 border border-border card-shadow">
-                <h3 class="text-lg font-heading font-semibold text-text mb-4 flex items-center gap-2">
-                    <svg class="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    系统提示
-                </h3>
-                <div class="bg-surface rounded-xl p-4">
-                    <p class="text-sm text-text-muted">建议：设置 SECRET_KEY 与 ADMIN_DEFAULT_PASSWORD，首次登录后修改默认密码。</p>
-                </div>
-                <div class="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-xl">
-                    <div class="flex items-start gap-3">
-                        <svg class="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                        </svg>
-                        <div>
-                            <p class="text-sm font-medium text-amber-800">安全提醒</p>
-                            <p class="text-xs text-amber-700 mt-1">只有管理员和已授权用户可以登录系统，未授权用户将被拒绝访问。</p>
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <div class="bg-surface rounded-xl p-5">
+                                <h4 class="text-sm font-semibold text-text mb-3 flex items-center gap-2">
+                                    <div class="w-6 h-6 bg-primary/10 rounded-lg flex items-center justify-center">
+                                        <svg class="w-3.5 h-3.5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                                        </svg>
+                                    </div>
+                                    问答服务
+                                </h4>
+                                <div class="space-y-3">
+                                    <div>
+                                        <label>API Base URL</label>
+                                        <input id="configApiUrl" placeholder="https://dashscope.aliyuncs.com/compatible-mode/v1" />
+                                    </div>
+                                    <div>
+                                        <label>API Key (留空则不改)</label>
+                                        <input id="configApiKey" type="password" placeholder="sk-xxxxxxxx" />
+                                    </div>
+                                    <div>
+                                        <label>模型名称</label>
+                                        <input id="configModel" placeholder="qwen-plus" />
+                                        <p class="text-xs text-text-light mt-1">推荐: qwen-plus, qwen-turbo, qwen-max</p>
+                                    </div>
+                                    <button class="btn secondary w-full" onclick="testAIConfig()">测试 AI 连接</button>
+                                </div>
+                            </div>
+
+                            <div class="bg-blue-50 rounded-xl p-5">
+                                <h4 class="text-sm font-semibold text-text mb-3 flex items-center gap-2">
+                                    <div class="w-6 h-6 bg-blue-100 rounded-lg flex items-center justify-center">
+                                        <svg class="w-3.5 h-3.5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
+                                        </svg>
+                                    </div>
+                                    智能搜索服务
+                                </h4>
+                                <div class="space-y-3">
+                                    <div>
+                                        <label>Embedding API URL</label>
+                                        <input id="configEmbeddingApiUrl" placeholder="https://dashscope.aliyuncs.com/compatible-mode/v1" class="bg-white" />
+                                    </div>
+                                    <div>
+                                        <label>Embedding API Key (留空则不改)</label>
+                                        <input id="configEmbeddingApiKey" type="password" placeholder="sk-xxxxxxxx" class="bg-white" />
+                                    </div>
+                                    <div>
+                                        <label>Embedding 模型</label>
+                                        <input id="configEmbeddingModel" placeholder="text-embedding-v3" class="bg-white" />
+                                        <p class="text-xs text-text-light mt-1">推荐: text-embedding-v3, text-embedding-v4</p>
+                                    </div>
+                                    <button class="btn secondary w-full" onclick="testEmbeddingConfig()">测试 Embedding 连接</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="flex justify-between items-center mt-6 pt-6 border-t border-border">
+                            <button class="btn" onclick="saveConfig()">保存所有配置</button>
+                            <button class="btn secondary" onclick="showConfigHelp()">配置帮助</button>
+                        </div>
+                    </section>
+                </section>
+
+                <section class="workspace-section" data-section="users">
+                    <div class="bg-white rounded-2xl p-6 border border-border card-shadow mb-6">
+                        <h2 class="text-xl font-heading font-semibold text-text">账号管理</h2>
+                        <p class="text-sm text-text-muted mt-1">新增账号、停用账号、重置密码都在这里处理。</p>
+                    </div>
+                    <section class="bg-white rounded-2xl p-6 border border-border card-shadow">
+                        <h3 class="text-lg font-heading font-semibold text-text mb-4 flex items-center gap-2">
+                            <svg class="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                            </svg>
+                            账号列表
+                        </h3>
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                            <div>
+                                <label>用户名</label>
+                                <input id="newUserName" placeholder="请输入用户名" />
+                            </div>
+                            <div>
+                                <label>密码</label>
+                                <input id="newUserPassword" type="password" placeholder="请输入密码" />
+                            </div>
+                            <div>
+                                <label>角色</label>
+                                <select id="newUserRole">
+                                    <option value="user">普通用户</option>
+                                    <option value="admin">管理员</option>
+                                </select>
+                            </div>
+                            <div class="flex items-end">
+                                <button class="btn w-full" onclick="createUser()">新增用户</button>
+                            </div>
+                        </div>
+                        <div class="overflow-x-auto rounded-xl border border-border">
+                            <table>
+                                <thead class="bg-surface">
+                                    <tr>
+                                        <th>账号</th>
+                                        <th>角色</th>
+                                        <th>状态</th>
+                                        <th>最近登录</th>
+                                        <th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="usersTable"></tbody>
+                            </table>
+                        </div>
+                    </section>
+                </section>
+
+                <section class="workspace-section" data-section="audit">
+                    <div class="bg-white rounded-2xl p-6 border border-border card-shadow mb-6">
+                        <h2 class="text-xl font-heading font-semibold text-text">操作记录与安全</h2>
+                        <p class="text-sm text-text-muted mt-1">查看最近谁做了什么，并核对安全提醒。</p>
+                    </div>
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div class="bg-white rounded-2xl p-6 border border-border card-shadow">
+                            <h3 class="text-lg font-heading font-semibold text-text mb-4 flex items-center gap-2">
+                                <svg class="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                                </svg>
+                                最近操作记录
+                            </h3>
+                            <div class="overflow-auto max-h-64 rounded-xl border border-border">
+                                <table>
+                                    <thead class="bg-surface sticky top-0">
+                                        <tr>
+                                            <th>时间</th>
+                                            <th>用户</th>
+                                            <th>动作</th>
+                                            <th>IP</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="auditTable"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="bg-white rounded-2xl p-6 border border-border card-shadow">
+                            <h3 class="text-lg font-heading font-semibold text-text mb-4 flex items-center gap-2">
+                                <svg class="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                安全提醒
+                            </h3>
+                            <div class="bg-surface rounded-xl p-4">
+                                <p class="text-sm text-text-muted">建议：首次登录后立即修改默认密码，并妥善保管管理员账号。</p>
+                            </div>
+                            <div class="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+                                <div class="flex items-start gap-3">
+                                    <svg class="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                    </svg>
+                                    <div>
+                                        <p class="text-sm font-medium text-amber-800">安全提醒</p>
+                                        <p class="text-xs text-amber-700 mt-1">只有管理员和已授权用户可以登录系统，未授权用户将被拒绝访问。</p>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
-                </div>
+                </section>
             </div>
-        </section>
+        </div>
     </main>
 
     <div class="toast" id="toast"></div>
 
     <script>
         const API_BASE = '';
+        let csrfToken = '';
+        let syncApiKey = '';
+        let syncAuthWarned = false;
+        let currentAdminSection = 'overview';
+        let adminNavInitialized = false;
+
+        function switchAdminSection(sectionName) {
+            const target = sectionName || 'overview';
+            currentAdminSection = target;
+            document.querySelectorAll('.workspace-section').forEach(section => {
+                const isActive = section.dataset.section === target;
+                section.classList.toggle('active', isActive);
+            });
+            document.querySelectorAll('.workspace-tab').forEach(tab => {
+                const isActive = tab.dataset.sectionTarget === target;
+                tab.classList.toggle('active', isActive);
+            });
+        }
+
+        function initAdminNavigation() {
+            if (adminNavInitialized) {
+                return;
+            }
+            adminNavInitialized = true;
+            document.querySelectorAll('.workspace-tab').forEach(tab => {
+                tab.addEventListener('click', () => {
+                    switchAdminSection(tab.dataset.sectionTarget || 'overview');
+                });
+            });
+            switchAdminSection(currentAdminSection);
+        }
+
+        // XSS 防护：HTML 转义函数
+        function escapeHtml(text) {
+            if (typeof text !== 'string') return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function escapeJsString(text) {
+            if (typeof text !== 'string') return '';
+            return text
+                .replace(/\\/g, '\\\\')
+                .replace(/"/g, '\\"')
+                .replace(/'/g, "\\'")
+                .replace(/\r/g, '\\r')
+                .replace(/\n/g, '\\n');
+        }
+
+        function escapeHtmlAttr(text) {
+            if (typeof text !== 'string') return '';
+            return text
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
 
         function showToast(text) {
             const toast = document.getElementById('toast');
@@ -376,26 +741,65 @@
 
         async function fetchJSON(url, options = {}) {
             try {
-                const res = await fetch(url, { credentials: 'include', ...options });
-                return res.json();
+                const method = (options.method || 'GET').toUpperCase();
+                const headers = { ...(options.headers || {}) };
+                if (csrfToken && method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS') {
+                    headers['X-CSRF-Token'] = csrfToken;
+                }
+                const res = await fetch(url, { credentials: 'include', ...options, headers });
+                const data = await res.json();
+                
+                // 如果是 403 权限错误且错误信息是"无权限访问"，静默处理
+                if (!data.success && res.status === 403 && data.error === '无权限访问') {
+                    console.warn('权限不足，可能需要重新登录:', url);
+                    return data;
+                }
+                
+                return data;
             } catch (e) {
                 console.error('fetchJSON error:', e);
                 return { success: false, error: '网络请求失败: ' + e.message };
             }
         }
 
+        function buildSyncHeaders(baseHeaders = {}) {
+            const headers = { ...baseHeaders };
+            if (syncApiKey) {
+                headers['X-API-Key'] = syncApiKey;
+                headers['X-Timestamp'] = String(Math.floor(Date.now() / 1000));
+            }
+            return headers;
+        }
+
+        function ensureSyncApiKey(interactive = true) {
+            if (syncApiKey) return true;
+            if (!interactive) return false;
+            const input = prompt('请输入 SYNC_API_KEY（仅当前页面内存保存，不写入 URL 或本地存储）');
+            if (!input) return false;
+            syncApiKey = input.trim();
+            syncAuthWarned = false;
+            return !!syncApiKey;
+        }
+
         async function loadMe() {
             const data = await fetchJSON(`${API_BASE}/api/auth/me`);
             if (data.success) {
+                csrfToken = data.data.csrf_token || '';
                 const userEl = document.getElementById('currentUser');
                 const role = data.data.role === 'admin' ? '管理员' : '用户';
+                // 使用 textContent 安全设置用户名，防止 XSS
                 userEl.innerHTML = `
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                     </svg>
-                    <span>${data.data.username}</span>
-                    <span class="text-xs opacity-70">(${role})</span>
                 `;
+                const usernameSpan = document.createElement('span');
+                usernameSpan.textContent = data.data.username;
+                userEl.appendChild(usernameSpan);
+                const roleSpan = document.createElement('span');
+                roleSpan.className = 'text-xs opacity-70';
+                roleSpan.textContent = `(${role})`;
+                userEl.appendChild(roleSpan);
                 return;
             }
             window.location.href = '/login';
@@ -413,12 +817,19 @@
                 document.getElementById('statManufacturers').textContent = stats.data.manufacturers_count.toLocaleString();
                 document.getElementById('statUpdated').textContent = `最后同步：${stats.data.last_sync || '--'}`;
             }
+            
+            // 尝试加载 embedding 统计，如果失败（如权限不足）则显示默认值
             const embeddingStats = await fetchJSON(`${API_BASE}/api/embedding/stats`);
             if (embeddingStats.success) {
                 const data = embeddingStats.data;
                 document.getElementById('statEmbedding').textContent = data.coverage;
                 document.getElementById('statEmbeddingCount').textContent = `已索引 ${data.total_embeddings} / ${data.total_products}`;
                 document.getElementById('embeddingPending').textContent = `待处理: ${data.pending || 0} 条`;
+            } else {
+                // 权限不足或其他错误，显示默认值
+                document.getElementById('statEmbedding').textContent = '--';
+                document.getElementById('statEmbeddingCount').textContent = '需要登录查看';
+                document.getElementById('embeddingPending').textContent = '--';
             }
         }
 
@@ -426,10 +837,22 @@
             const data = await fetchJSON(`${API_BASE}/api/config`);
             if (data.success && data.data) {
                 document.getElementById('configApiUrl').value = data.data.api_base_url || '';
-                document.getElementById('configApiKey').value = data.data.api_key || '';
+                const apiKeyEl = document.getElementById('configApiKey');
+                apiKeyEl.value = '';
+                if (data.meta && data.meta.has_api_key) {
+                    apiKeyEl.placeholder = '已配置 (留空则不改)';
+                } else {
+                    apiKeyEl.placeholder = 'sk-...';
+                }
                 document.getElementById('configModel').value = data.data.model || '';
                 document.getElementById('configEmbeddingApiUrl').value = data.data.embedding_api_url || '';
-                document.getElementById('configEmbeddingApiKey').value = data.data.embedding_api_key || '';
+                const embeddingKeyEl = document.getElementById('configEmbeddingApiKey');
+                embeddingKeyEl.value = '';
+                if (data.meta && data.meta.has_embedding_api_key) {
+                    embeddingKeyEl.placeholder = '已配置 (留空则不改)';
+                } else {
+                    embeddingKeyEl.placeholder = 'sk-...';
+                }
                 document.getElementById('configEmbeddingModel').value = data.data.embedding_model || '';
             }
         }
@@ -496,16 +919,323 @@
             alert(helpContent);
         }
 
+        // 同步进度轮询定时器
+        let syncProgressTimer = null;
+
+        // 阶段映射配置
+        const SYNC_STAGE_CONFIG = {
+            'preparing': { name: '准备中', icon: '⏳', order: 1 },
+            'checking': { name: '检查更新', icon: '🔍', order: 2 },
+            'downloading': { name: '下载数据', icon: '⬇️', order: 3 },
+            'extracting': { name: '解压数据', icon: '📦', order: 4 },
+            'importing': { name: '导入数据', icon: '💾', order: 5 },
+            'vectors': { name: '生成向量', icon: '🔢', order: 6 },
+            'completed': { name: '完成', icon: '✅', order: 7 },
+            'failed': { name: '失败', icon: '❌', order: 8 },
+            'stopped': { name: '已停止', icon: '🛑', order: 9 }
+        };
+
         async function triggerSync() {
-            document.getElementById('opsStatus').textContent = '正在同步...';
-            const data = await fetchJSON(`${API_BASE}/api/sync`, { method: 'POST' });
-            if (data.success) {
-                showToast(data.message || '同步完成');
-                loadStats();
-            } else {
-                showToast(data.error || '同步失败');
+            if (!ensureSyncApiKey(true)) {
+                showToast('未提供 SYNC_API_KEY，无法启动同步');
+                return;
             }
-            document.getElementById('opsStatus').textContent = '等待操作';
+            // 显示进度面板和阶段面板
+            showSyncProgress(true);
+            showSyncStages(true);
+            updateSyncStagesUI('preparing', []);
+
+            // 切换按钮状态
+            setSyncButtonsState('running');
+
+            // 启动同步
+            const data = await fetchJSON(`${API_BASE}/api/sync/start`, {
+                method: 'POST',
+                headers: buildSyncHeaders()
+            });
+            if (data.success) {
+                showToast('同步已启动');
+                // 开始轮询进度
+                startSyncProgressPolling();
+            } else {
+                showToast(data.error || '同步启动失败');
+                if (data.data && data.data.is_running) {
+                    // 如果已经在运行，也轮询进度
+                    startSyncProgressPolling();
+                } else {
+                    setSyncButtonsState('idle');
+                }
+            }
+        }
+
+        async function stopSync() {
+            if (!ensureSyncApiKey(true)) {
+                showToast('未提供 SYNC_API_KEY，无法停止同步');
+                return;
+            }
+            const data = await fetchJSON(`${API_BASE}/api/sync/stop`, {
+                method: 'POST',
+                headers: buildSyncHeaders()
+            });
+            if (data.success) {
+                showToast('已发送停止请求');
+                document.getElementById('syncStageText').textContent = '正在停止...';
+            } else {
+                showToast(data.error || '停止失败');
+            }
+        }
+
+        function setSyncButtonsState(state) {
+            const btnStart = document.getElementById('btnStartSync');
+            const btnStop = document.getElementById('btnStopSync');
+
+            if (state === 'running') {
+                btnStart.classList.add('hidden');
+                btnStop.classList.remove('hidden');
+            } else {
+                btnStart.classList.remove('hidden');
+                btnStop.classList.add('hidden');
+            }
+        }
+
+        function showSyncProgress(show) {
+            document.getElementById('syncProgressPanel').style.display = show ? 'block' : 'none';
+        }
+
+        function showSyncStages(show) {
+            document.getElementById('syncStagesPanel').style.display = show ? 'block' : 'none';
+        }
+
+        function formatDuration(seconds) {
+            if (seconds === null || seconds === undefined) return '--';
+            const mins = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            if (mins > 0) {
+                return `${mins}分${secs}秒`;
+            }
+            return `${secs}秒`;
+        }
+
+        function updateSyncStagesUI(currentStage, completedStages) {
+            const stageItems = document.querySelectorAll('.sync-stage-item');
+            const stageBadge = document.getElementById('syncStageBadge');
+
+            stageItems.forEach(item => {
+                const stage = item.dataset.stage;
+                item.classList.remove('active', 'completed');
+
+                if (stage === currentStage) {
+                    item.classList.add('active');
+                } else if (completedStages.includes(stage)) {
+                    item.classList.add('completed');
+                }
+            });
+
+            // 更新阶段徽章
+            const config = SYNC_STAGE_CONFIG[currentStage];
+            if (config && stageBadge) {
+                stageBadge.textContent = config.name;
+                stageBadge.className = 'px-2 py-0.5 rounded-full text-xs font-medium ' +
+                    (currentStage === 'completed' ? 'bg-green-100 text-green-700' :
+                     currentStage === 'failed' ? 'bg-red-100 text-red-700' :
+                     currentStage === 'stopped' ? 'bg-yellow-100 text-yellow-700' :
+                     'bg-blue-100 text-blue-700');
+            }
+        }
+
+        function updateSyncProgressUI(progress) {
+            const stage = progress.stage || 'processing';
+            const current = progress.current || 0;
+            const total = progress.total || 100;
+            const percent = Math.min(100, Math.round(current / total * 100));
+            const message = progress.message || '处理中...';
+            const elapsed = progress.elapsed_seconds || 0;
+            const remaining = progress.estimated_remaining;
+            const completedStages = progress.stages_completed || [];
+
+            // 更新阶段可视化
+            updateSyncStagesUI(stage, completedStages);
+
+            // 更新进度条
+            const config = SYNC_STAGE_CONFIG[stage];
+            document.getElementById('syncStageText').textContent = config ? `${config.icon} ${config.name}` : message;
+            document.getElementById('syncPercent').textContent = percent + '%';
+            document.getElementById('syncProgressBar').style.width = percent + '%';
+            document.getElementById('syncDetail').textContent = `${current} / ${total}`;
+
+            const timeText = `已用: ${formatDuration(elapsed)}` +
+                (remaining !== null && remaining !== undefined ? ` | 预计剩余: ${formatDuration(remaining)}` : ' | 预计剩余: 计算中...');
+            document.getElementById('syncTime').textContent = timeText;
+
+            // 更新当前文件
+            if (progress.current_file) {
+                document.getElementById('syncCurrentFile').textContent = `当前: ${progress.current_file} (${progress.files_processed}/${progress.files_total})`;
+            }
+
+            // 更新状态文本
+            const statusText = document.getElementById('syncStatusText');
+            if (stage === 'completed') {
+                statusText.textContent = message;
+                statusText.className = 'muted mb-3 text-green-600';
+            } else if (stage === 'failed') {
+                statusText.textContent = message;
+                statusText.className = 'muted mb-3 text-red-600';
+            } else if (stage === 'stopped') {
+                statusText.textContent = message || '同步已停止';
+                statusText.className = 'muted mb-3 text-yellow-600';
+            } else {
+                statusText.textContent = message;
+                statusText.className = 'muted mb-3';
+            }
+
+            return stage === 'completed' || stage === 'failed' || stage === 'stopped';
+        }
+
+        function startSyncProgressPolling() {
+            if (syncProgressTimer) {
+                clearTimeout(syncProgressTimer);
+                syncProgressTimer = null;
+            }
+
+            let inFlight = false;
+            const scheduleNext = () => {
+                syncProgressTimer = setTimeout(poll, 1000);
+            };
+
+            const poll = async () => {
+                if (inFlight) {
+                    scheduleNext();
+                    return;
+                }
+                inFlight = true;
+                try {
+                    const data = await fetchJSON(`${API_BASE}/api/sync/progress`, {
+                        headers: buildSyncHeaders()
+                    });
+                    if (data.success && data.data) {
+                        const isDone = updateSyncProgressUI(data.data);
+                        if (isDone || !data.data.is_running) {
+                            syncProgressTimer = null;
+
+                            // 恢复按钮状态
+                            setSyncButtonsState('idle');
+
+                            // 延迟隐藏进度条并刷新数据
+                            setTimeout(() => {
+                                showSyncProgress(false);
+                                showSyncStages(false);
+                                loadStats();
+                                loadSyncHistory();
+                            }, 3000);
+                            return;
+                        }
+                    }
+                } finally {
+                    inFlight = false;
+                }
+                scheduleNext();
+            };
+
+            poll();
+        }
+
+        async function loadSyncHistory() {
+            const data = await fetchJSON(`${API_BASE}/api/sync/history`, {
+                headers: buildSyncHeaders()
+            });
+            const container = document.getElementById('syncHistoryList');
+
+            if (!data.success || !data.data || data.data.length === 0) {
+                container.innerHTML = '<div class="text-center py-2 text-text-light">暂无同步记录</div>';
+                return;
+            }
+
+            const rows = data.data.map(item => {
+                const date = item.start_time ? new Date(item.start_time).toLocaleString('zh-CN') : '--';
+                const statusIcon = item.status === 'success' ? '✓' : (item.status === 'failed' ? '✗' : '○');
+                const statusClass = item.status === 'success' ? 'text-green-600' : (item.status === 'failed' ? 'text-red-600' : 'text-blue-600');
+                const duration = item.duration_seconds ? formatDuration(item.duration_seconds) : '--';
+                const records = item.records_count ? `${item.records_count.toLocaleString()}条` : '';
+
+                return `
+                    <div class="flex justify-between items-center py-1 border-b border-border last:border-0">
+                        <span class="${statusClass}">${statusIcon} ${date}</span>
+                        <span class="text-text-light">${records} ${duration}</span>
+                    </div>
+                `;
+            }).join('');
+
+            container.innerHTML = rows;
+        }
+
+        // 切换同步监控详情显示
+        function toggleSyncMonitor() {
+            const detail = document.getElementById('syncMonitorDetail');
+            detail.style.display = detail.style.display === 'none' ? 'block' : 'none';
+            if (detail.style.display === 'block') {
+                refreshSyncStatus();
+            }
+        }
+
+        // 刷新同步状态
+        async function refreshSyncStatus() {
+            if (!ensureSyncApiKey(false)) {
+                if (!syncAuthWarned) {
+                    showToast('同步监控需要 SYNC_API_KEY');
+                    syncAuthWarned = true;
+                }
+                return;
+            }
+            syncAuthWarned = false;
+            try {
+                // 获取同步状态
+                const statusRes = await fetchJSON(`${API_BASE}/api/sync/status`, {
+                    headers: buildSyncHeaders()
+                });
+                if (statusRes.total_products !== undefined) {
+                    document.getElementById('syncTotalProducts').textContent = statusRes.total_products.toLocaleString();
+                    const coverage = statusRes.total_products > 0
+                        ? Math.round((statusRes.total_vectors / statusRes.total_products) * 100)
+                        : 0;
+                    document.getElementById('syncVectorCoverage').textContent = coverage + '%';
+                    document.getElementById('syncLastTime').textContent = statusRes.last_sync
+                        ? new Date(statusRes.last_sync).toLocaleDateString('zh-CN')
+                        : '--';
+                }
+
+                // 获取日志
+                const logsRes = await fetchJSON(`${API_BASE}/api/sync/logs`, {
+                    headers: buildSyncHeaders()
+                });
+                if (Array.isArray(logsRes.logs)) {
+                    updateSyncLogs(logsRes.logs);
+                }
+
+                // 刷新历史
+                loadSyncHistory();
+            } catch (e) {
+                console.error('刷新同步状态失败:', e);
+            }
+        }
+
+        // 更新同步日志显示
+        function updateSyncLogs(logs) {
+            const container = document.getElementById('syncLogContainer');
+            if (logs.length === 0) {
+                container.innerHTML = '<div class="text-gray-500">暂无日志</div>';
+                return;
+            }
+
+            container.innerHTML = logs.slice(-20).map(log => {
+                let colorClass = 'text-gray-300';
+                if (log.type === 'error') colorClass = 'text-red-400';
+                if (log.type === 'warning') colorClass = 'text-yellow-400';
+                if (log.type === 'success') colorClass = 'text-green-400';
+                return `<div class="${colorClass}">${escapeHtml(log.message)}</div>`;
+            }).join('');
+
+            // 滚动到底部
+            container.scrollTop = container.scrollHeight;
         }
 
         // 进度轮询定时器
@@ -757,6 +1487,7 @@
             const res = await fetch(`${API_BASE}/api/upload`, {
                 method: 'POST',
                 credentials: 'include',
+                headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : {},
                 body: formData
             });
             const data = await res.json();
@@ -776,25 +1507,51 @@
                 return;
             }
             const rows = data.data.map(user => {
-                const roleBadge = `<span class="badge">${user.role}</span>`;
+                const safeUsername = escapeHtml(String(user.username || ''));
+                const safeLastLogin = escapeHtml(String(user.last_login || '--'));
+                const safeRole = escapeHtml(String(user.role || 'user'));
+                const safeUsernameAttr = escapeHtmlAttr(String(user.username || ''));
+                const roleBadge = `<span class="badge">${safeRole}</span>`;
                 const statusBadge = user.is_active
                     ? '<span class="badge green">启用</span>'
                     : '<span class="badge red">禁用</span>';
                 return `
                     <tr>
-                        <td>${user.username}</td>
+                        <td>${safeUsername}</td>
                         <td>${roleBadge}</td>
                         <td>${statusBadge}</td>
-                        <td>${user.last_login || '--'}</td>
+                        <td>${safeLastLogin}</td>
                         <td>
-                            <button class="btn secondary" onclick="toggleUser(${user.id}, ${user.is_active ? 'false' : 'true'})">${user.is_active ? '禁用' : '启用'}</button>
-                            <button class="btn secondary" onclick="resetPasswordPrompt(${user.id})">重置密码</button>
-                            <button class="btn secondary" onclick="deleteUser(${user.id}, '${user.username}')">删除</button>
+                            <button class="btn secondary js-toggle-user" data-user-id="${user.id}" data-next-active="${user.is_active ? '0' : '1'}">${user.is_active ? '禁用' : '启用'}</button>
+                            <button class="btn secondary js-reset-password" data-user-id="${user.id}">重置密码</button>
+                            <button class="btn secondary js-delete-user" data-user-id="${user.id}" data-username="${safeUsernameAttr}">删除</button>
                         </td>
                     </tr>
                 `;
             }).join('');
-            document.getElementById('usersTable').innerHTML = rows || '<tr><td colspan="5">暂无用户</td></tr>';
+            const tableBody = document.getElementById('usersTable');
+            tableBody.innerHTML = rows || '<tr><td colspan="5">暂无用户</td></tr>';
+
+            tableBody.querySelectorAll('.js-toggle-user').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const userId = parseInt(btn.dataset.userId, 10);
+                    const nextActive = btn.dataset.nextActive === '1';
+                    toggleUser(userId, nextActive);
+                });
+            });
+            tableBody.querySelectorAll('.js-reset-password').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const userId = parseInt(btn.dataset.userId, 10);
+                    resetPasswordPrompt(userId);
+                });
+            });
+            tableBody.querySelectorAll('.js-delete-user').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const userId = parseInt(btn.dataset.userId, 10);
+                    const username = btn.dataset.username || '';
+                    deleteUser(userId, username);
+                });
+            });
         }
 
         async function createUser() {
@@ -872,21 +1629,24 @@
             }
             const rows = data.data.map(item => `
                 <tr>
-                    <td>${item.created_at}</td>
-                    <td>${item.user_id || '-'}</td>
-                    <td>${item.action}</td>
-                    <td>${item.ip || '-'}</td>
+                    <td>${escapeHtml(String(item.created_at || '-'))}</td>
+                    <td>${escapeHtml(String(item.user_id || '-'))}</td>
+                    <td>${escapeHtml(String(item.action || '-'))}</td>
+                    <td>${escapeHtml(String(item.ip || '-'))}</td>
                 </tr>
             `).join('');
             document.getElementById('auditTable').innerHTML = rows || '<tr><td colspan="4">暂无记录</td></tr>';
         }
 
         async function bootstrap() {
+            initAdminNavigation();
             await loadMe();
             await loadStats();
             await loadConfig();
             await loadUsers();
             await loadAudit();
+            await loadSyncHistory();
+            setTimeout(refreshSyncStatus, 1000);
         }
 
         bootstrap();

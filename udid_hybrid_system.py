@@ -5,7 +5,10 @@ import time
 import random
 import os
 import json
+import re
+import threading
 from datetime import datetime
+from db_backend import connect as db_connect, is_postgres_backend
 
 # ==========================================
 # 模块 1: 本地数据湖 (Local Data Lake)
@@ -14,12 +17,46 @@ from datetime import datetime
 class LocalDataLake:
     def __init__(self, db_path='udid_hybrid_lake.db'):
         self.db_path = db_path
-        self.conn = None
+        self._is_postgres = is_postgres_backend()
+        self._sqlite_conn = None
+        self._thread_local = threading.local()
         self._init_db()
 
+    @property
+    def conn(self):
+        if self._is_postgres:
+            conn = getattr(self._thread_local, 'conn', None)
+            if conn is None:
+                conn = db_connect(self.db_path, check_same_thread=False, timeout=10)
+                self._thread_local.conn = conn
+            return conn
+        if self._sqlite_conn is None:
+            self._sqlite_conn = db_connect(self.db_path, check_same_thread=False, timeout=10)
+        return self._sqlite_conn
+
+    def release_thread_connection(self):
+        if not self._is_postgres:
+            return
+        conn = getattr(self._thread_local, 'conn', None)
+        if conn is None:
+            return
+        try:
+            conn.close()
+        except Exception as e:
+            print(f"[DB] 释放 PostgreSQL 连接失败: {e}")
+        finally:
+            self._thread_local.conn = None
+
     def _init_db(self):
-        self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
-        cursor = self.conn.cursor()
+        conn = self.conn
+        try:
+            conn.execute('PRAGMA busy_timeout = 5000')
+            conn.execute('PRAGMA journal_mode = WAL')
+            conn.execute('PRAGMA synchronous = NORMAL')
+        except Exception as e:
+            # PRAGMA 失败不影响主流程（例如只读文件系统或特殊环境）
+            print(f"[DB] PRAGMA 初始化失败: {e}")
+        cursor = conn.cursor()
         # 创建增强版产品表（支持更多字段）
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS products (
@@ -55,11 +92,19 @@ class LocalDataLake:
             CREATE TABLE IF NOT EXISTS sync_log (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 sync_date TEXT,
+                data_date TEXT,
                 file_name TEXT,
                 records_count INTEGER,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
+        if self._is_postgres:
+            cursor.execute("ALTER TABLE sync_log ADD COLUMN IF NOT EXISTS data_date TEXT")
+        else:
+            try:
+                cursor.execute("ALTER TABLE sync_log ADD COLUMN data_date TEXT")
+            except sqlite3.OperationalError:
+                pass
 
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS sync_run (
@@ -99,8 +144,63 @@ class LocalDataLake:
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
-        
-        self.conn.commit()
+
+        # 创建向量更新通知表（用于模块间通信）
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS embedding_update_queue (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                di_code TEXT NOT NULL,
+                action TEXT DEFAULT 'update',
+                status TEXT DEFAULT 'pending',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                claimed_at TIMESTAMP,
+                processed_at TIMESTAMP,
+                error_message TEXT,
+                UNIQUE(di_code, status)
+            )
+        ''')
+        if self._is_postgres:
+            cursor.execute("ALTER TABLE embedding_update_queue ADD COLUMN IF NOT EXISTS claimed_at TIMESTAMP")
+        else:
+            try:
+                cursor.execute("ALTER TABLE embedding_update_queue ADD COLUMN claimed_at TIMESTAMP")
+            except sqlite3.OperationalError:
+                pass
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_embedding_queue_status ON embedding_update_queue(status)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_embedding_queue_created ON embedding_update_queue(created_at)')
+        self._dedupe_embedding_queue(cursor)
+
+        conn.commit()
+
+    def _dedupe_embedding_queue(self, cursor) -> None:
+        """
+        队列只作为“当前状态”使用，清理历史重复状态，避免 pending->completed 时命中 UNIQUE(di_code,status) 冲突。
+        保留每个 di_code 最新一条记录。
+        """
+        if self._is_postgres:
+            cursor.execute('''
+                DELETE FROM embedding_update_queue q
+                USING (
+                    SELECT id
+                    FROM (
+                        SELECT id,
+                               ROW_NUMBER() OVER (
+                                   PARTITION BY di_code
+                                   ORDER BY created_at DESC, id DESC
+                               ) AS rn
+                        FROM embedding_update_queue
+                    ) ranked
+                    WHERE ranked.rn > 1
+                ) dup
+                WHERE q.id = dup.id
+            ''')
+        else:
+            cursor.execute('''
+                DELETE FROM embedding_update_queue
+                WHERE id NOT IN (
+                    SELECT MAX(id) FROM embedding_update_queue GROUP BY di_code
+                )
+            ''')
 
     def _normalize_date(self, value: str) -> str:
         if not value:
@@ -115,6 +215,18 @@ class LocalDataLake:
             return value
         except ValueError:
             return ''
+
+    def _extract_data_date_from_filename(self, file_name: str) -> str:
+        """
+        从同步文件名中提取数据日期（YYYY-MM-DD）。
+        例如: ...20260301... -> 2026-03-01
+        """
+        if not file_name:
+            return ''
+        matches = re.findall(r'(\d{8})', str(file_name))
+        if not matches:
+            return ''
+        return self._normalize_date(matches[-1])
 
     def _validate_record(self, data: dict) -> list:
         errors = []
@@ -159,12 +271,26 @@ class LocalDataLake:
         self.conn.commit()
 
     def ingest_xml(self, xml_file):
-        """导入 RSS/XML 数据（增强版：支持更多字段，编码容错）"""
-        print(f"[LocalLake] 正在从 XML 文件导入数据: {os.path.basename(xml_file)} ...")
+        """导入 RSS/XML 数据（增强版：支持更多字段，编码容错，事务管理）
+
+        Returns:
+            dict: {
+                'total': 总记录数,
+                'inserted': 新增记录数,
+                'updated': 变更记录数,
+                'skipped': 跳过记录数,
+                'rejected': 拒绝记录数
+            }
+        """
+        file_name = os.path.basename(xml_file)
+        print(f"\n[LocalLake] {'='*60}")
+        print(f"[LocalLake] 开始导入: {file_name}")
+        print(f"[LocalLake] {'='*60}")
+
         if not os.path.exists(xml_file):
             print(f"[LocalLake] 错误: 文件不存在 {xml_file}")
-            self.log_sync_run(os.path.basename(xml_file), 0, 'failed', '文件不存在')
-            return 0
+            self.log_sync_run(file_name, 0, 'failed', '文件不存在')
+            return {'total': 0, 'inserted': 0, 'updated': 0, 'skipped': 0, 'rejected': 0, 'error': '文件不存在'}
 
         # 尝试多种编码读取文件
         content = None
@@ -175,12 +301,12 @@ class LocalDataLake:
                 break
             except UnicodeDecodeError:
                 continue
-        
+
         if not content:
             print(f"[LocalLake] 无法读取文件: {xml_file}")
-            self.log_sync_run(os.path.basename(xml_file), 0, 'failed', '无法读取文件')
-            return 0
-        
+            self.log_sync_run(file_name, 0, 'failed', '无法读取文件')
+            return {'total': 0, 'inserted': 0, 'updated': 0, 'skipped': 0, 'rejected': 0, 'error': '无法读取文件'}
+
         try:
             root = ET.fromstring(content)
         except ET.ParseError as e:
@@ -192,171 +318,241 @@ class LocalDataLake:
                 root = ET.fromstring(content)
             except ET.ParseError as e2:
                 print(f"[LocalLake] XML 解析错误: {e2}")
-                self.log_sync_run(os.path.basename(xml_file), 0, 'failed', f"XML 解析错误: {e2}")
-                return 0
-            
-        count = 0
-        audit_count = 0
-        rejected = []
+                self.log_sync_run(file_name, 0, 'failed', f"XML 解析错误: {e2}")
+                return {'total': 0, 'inserted': 0, 'updated': 0, 'skipped': 0, 'rejected': 0, 'error': f'XML 解析错误: {e2}'}
+
+        # 统计计数器
+        stats = {
+            'total': 0,
+            'inserted': 0,      # 新增记录
+            'updated': 0,       # 变更记录
+            'skipped': 0,       # 跳过记录（新增但已存在、变更但不存在）
+            'rejected': 0,      # 拒绝记录（验证失败等）
+            'audit_count': 0
+        }
+        rejected_list = []
         cursor = self.conn.cursor()
-        file_name = os.path.basename(xml_file)
         updatable_fields = [
             'product_name', 'commercial_name', 'model', 'manufacturer', 'description',
             'publish_date', 'category_code', 'social_code', 'cert_no', 'status',
             'product_type', 'phone', 'email', 'scope', 'safety_info'
         ]
-        
+
         device_nodes = root.findall('.//device')
-        print(f"[LocalLake] 解析到 device 节点: {len(device_nodes)}")
+        total_nodes = len(device_nodes)
+        print(f"[LocalLake] 解析到 device 节点: {total_nodes}")
 
-        for device in device_nodes:
-            di_code = device.findtext('zxxsdycpbs', '')
-            if not di_code:
-                continue
-            
-            # 提取版本状态（新增/变更）
-            version_status = device.findtext('versionStauts', '').strip()
-            
-            # 提取所有字段
-            data = {
-                'di_code': di_code,
-                'product_name': device.findtext('cpmctymc', ''),
-                'commercial_name': device.findtext('spmc', ''),
-                'model': device.findtext('ggxh', ''),
-                'manufacturer': device.findtext('ylqxzcrbarmc', ''),
-                'description': device.findtext('cpms', ''),
-                'publish_date': device.findtext('cpbsfbrq', ''),
-                'category_code': device.findtext('flbm', ''),
-                'social_code': device.findtext('tyshxydm', ''),
-                'cert_no': device.findtext('zczbhhzbapzbh', ''),
-                'status': version_status,
-                'product_type': device.findtext('cplb', ''),
-                'phone': device.findtext('qylxrdh', ''),
-                'email': device.findtext('qylxryx', ''),
-                'scope': device.findtext('syfw', ''),
-                'safety_info': device.findtext('cgzmraqxgxx', ''),
-            }
+        # 分批处理配置
+        BATCH_SIZE = 1000
+        processed_count = 0
 
-            data['publish_date'] = self._normalize_date(data['publish_date'])
-            validation_errors = self._validate_record(data)
-            if validation_errors:
-                rejected.append((di_code, ';'.join(validation_errors)))
-                continue
+        try:
+            # 开始事务
+            self.conn.execute('BEGIN TRANSACTION')
 
-            existing = cursor.execute(
-                'SELECT product_name, commercial_name, model, manufacturer, description, '
-                'publish_date, category_code, social_code, cert_no, status, product_type, '
-                'phone, email, scope, safety_info '
-                'FROM products WHERE di_code = ?',
-                (di_code,)
-            ).fetchone()
-            
-            # 根据版本状态区分处理
-            is_new = version_status == '新增'
-            is_change = version_status in ('变更', '纠错')
-            
-            if is_new and existing:
-                # 新增但已存在：跳过，保护原有数据
-                rejected.append((di_code, '新增记录但产品已存在'))
-                continue
-            
-            if is_change and not existing:
-                # 变更但不存在：数据异常，跳过
-                rejected.append((di_code, '变更记录但产品不存在'))
-                continue
-            
-            if existing:
-                for idx, field in enumerate(updatable_fields):
-                    new_value = data.get(field, '')
-                    if new_value and new_value != (existing[idx] or ''):
-                        cursor.execute('''
-                            INSERT INTO data_audit_log (di_code, field_name, old_value, new_value, source, file_name)
-                            VALUES (?, ?, ?, ?, ?, ?)
-                        ''', (di_code, field, existing[idx] or '', new_value, 'RSS', file_name))
-                        audit_count += 1
-            
+            for idx, device in enumerate(device_nodes):
+                di_code = device.findtext('zxxsdycpbs', '')
+                if not di_code:
+                    continue
+
+                # 提取版本状态（新增/变更）
+                version_status = device.findtext('versionStauts', '').strip()
+
+                # 提取所有字段
+                data = {
+                    'di_code': di_code,
+                    'product_name': device.findtext('cpmctymc', ''),
+                    'commercial_name': device.findtext('spmc', ''),
+                    'model': device.findtext('ggxh', ''),
+                    'manufacturer': device.findtext('ylqxzcrbarmc', ''),
+                    'description': device.findtext('cpms', ''),
+                    'publish_date': device.findtext('cpbsfbrq', ''),
+                    'category_code': device.findtext('flbm', ''),
+                    'social_code': device.findtext('tyshxydm', ''),
+                    'cert_no': device.findtext('zczbhhzbapzbh', ''),
+                    'status': version_status,
+                    'product_type': device.findtext('cplb', ''),
+                    'phone': device.findtext('.//qylxrdh', ''),
+                    'email': device.findtext('.//qylxryx', ''),
+                    'scope': device.findtext('syfw', '') or device.findtext('sfwblztlcp', ''),
+                    'safety_info': device.findtext('cgzmraqxgxx', ''),
+                }
+
+                data['publish_date'] = self._normalize_date(data['publish_date'])
+                validation_errors = self._validate_record(data)
+                if validation_errors:
+                    rejected_list.append((di_code, ';'.join(validation_errors)))
+                    stats['rejected'] += 1
+                    stats['total'] += 1
+                    continue
+
+                existing = cursor.execute(
+                    'SELECT product_name, commercial_name, model, manufacturer, description, '
+                    'publish_date, category_code, social_code, cert_no, status, product_type, '
+                    'phone, email, scope, safety_info '
+                    'FROM products WHERE di_code = ?',
+                    (di_code,)
+                ).fetchone()
+
+                # 根据版本状态区分处理
+                is_new = version_status == '新增'
+                is_change = version_status in ('变更', '纠错')
+
+                if is_new and existing:
+                    # 新增但已存在：跳过，保护原有数据
+                    rejected_list.append((di_code, '新增记录但产品已存在'))
+                    stats['skipped'] += 1
+                    stats['total'] += 1
+                    continue
+
+                if is_change and not existing:
+                    # 变更但不存在：数据异常，跳过
+                    rejected_list.append((di_code, '变更记录但产品不存在'))
+                    stats['skipped'] += 1
+                    stats['total'] += 1
+                    continue
+
+                # 计统新增和变更
+                if existing:
+                    stats['updated'] += 1
+                else:
+                    stats['inserted'] += 1
+                stats['total'] += 1
+
+                if existing:
+                    for idx, field in enumerate(updatable_fields):
+                        new_value = data.get(field, '')
+                        if new_value and new_value != (existing[idx] or ''):
+                            cursor.execute('''
+                                INSERT INTO data_audit_log (di_code, field_name, old_value, new_value, source, file_name)
+                                VALUES (?, ?, ?, ?, ?, ?)
+                            ''', (di_code, field, existing[idx] or '', new_value, 'RSS', file_name))
+                            stats['audit_count'] += 1
+
+                cursor.execute('''
+                    INSERT INTO products
+                    (di_code, product_name, commercial_name, model, manufacturer,
+                     description, publish_date, source, last_updated, category_code,
+                     social_code, cert_no, status, product_type, phone, email, scope, safety_info)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, 'RSS', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(di_code) DO UPDATE SET
+                        product_name = CASE WHEN excluded.product_name != '' THEN excluded.product_name ELSE products.product_name END,
+                        commercial_name = CASE WHEN excluded.commercial_name != '' THEN excluded.commercial_name ELSE products.commercial_name END,
+                        model = CASE WHEN excluded.model != '' THEN excluded.model ELSE products.model END,
+                        manufacturer = CASE WHEN excluded.manufacturer != '' THEN excluded.manufacturer ELSE products.manufacturer END,
+                        description = CASE WHEN excluded.description != '' THEN excluded.description ELSE products.description END,
+                        publish_date = CASE WHEN excluded.publish_date != '' THEN excluded.publish_date ELSE products.publish_date END,
+                        category_code = CASE WHEN excluded.category_code != '' THEN excluded.category_code ELSE products.category_code END,
+                        social_code = CASE WHEN excluded.social_code != '' THEN excluded.social_code ELSE products.social_code END,
+                        cert_no = CASE WHEN excluded.cert_no != '' THEN excluded.cert_no ELSE products.cert_no END,
+                        status = CASE WHEN excluded.status != '' THEN excluded.status ELSE products.status END,
+                        product_type = CASE WHEN excluded.product_type != '' THEN excluded.product_type ELSE products.product_type END,
+                        phone = CASE WHEN excluded.phone != '' THEN excluded.phone ELSE products.phone END,
+                        email = CASE WHEN excluded.email != '' THEN excluded.email ELSE products.email END,
+                        scope = CASE WHEN excluded.scope != '' THEN excluded.scope ELSE products.scope END,
+                        safety_info = CASE WHEN excluded.safety_info != '' THEN excluded.safety_info ELSE products.safety_info END,
+                        last_updated = excluded.last_updated,
+                        source = excluded.source
+                ''', (
+                    data['di_code'],
+                    data['product_name'],
+                    data['commercial_name'],
+                    data['model'],
+                    data['manufacturer'],
+                    data['description'],
+                    data['publish_date'],
+                    datetime.now().isoformat(),
+                    data['category_code'],
+                    data['social_code'],
+                    data['cert_no'],
+                    data['status'],
+                    data['product_type'],
+                    data['phone'],
+                    data['email'],
+                    data['scope'],
+                    data['safety_info'],
+                ))
+                processed_count += 1
+
+                # 记录向量更新通知
+                # 队列仅保留每个 di_code 一条最新状态，避免历史 completed/failed 与新 pending 冲突。
+                cursor.execute('''
+                    DELETE FROM embedding_update_queue WHERE di_code = ?
+                ''', (data['di_code'],))
+                cursor.execute('''
+                    INSERT INTO embedding_update_queue (di_code, action, status)
+                    VALUES (?, 'update', 'pending')
+                ''', (data['di_code'],))
+
+                # 每处理 1000 条记录输出进度（保持单事务，失败可整体回滚）
+                if processed_count % BATCH_SIZE == 0:
+                    print(f"[LocalLake] 已处理 {processed_count}/{total_nodes} ({processed_count*100//total_nodes}%)...")
+
+            # 提交剩余记录
+            for di_code, reason in rejected_list:
+                cursor.execute('''
+                    INSERT INTO ingest_rejects (file_name, di_code, reason)
+                    VALUES (?, ?, ?)
+                ''', (file_name, di_code, reason))
+
+            # 记录同步日志
+            data_date = self._extract_data_date_from_filename(file_name) or datetime.now().strftime('%Y-%m-%d')
             cursor.execute('''
-                INSERT INTO products 
-                (di_code, product_name, commercial_name, model, manufacturer, 
-                 description, publish_date, source, last_updated, category_code,
-                 social_code, cert_no, status, product_type, phone, email, scope, safety_info)
-                VALUES (?, ?, ?, ?, ?, ?, ?, 'RSS', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(di_code) DO UPDATE SET
-                    product_name = CASE WHEN excluded.product_name != '' THEN excluded.product_name ELSE products.product_name END,
-                    commercial_name = CASE WHEN excluded.commercial_name != '' THEN excluded.commercial_name ELSE products.commercial_name END,
-                    model = CASE WHEN excluded.model != '' THEN excluded.model ELSE products.model END,
-                    manufacturer = CASE WHEN products.manufacturer IS NULL OR products.manufacturer = '' THEN excluded.manufacturer ELSE products.manufacturer END,
-                    description = CASE WHEN excluded.description != '' THEN excluded.description ELSE products.description END,
-                    publish_date = CASE WHEN excluded.publish_date != '' THEN excluded.publish_date ELSE products.publish_date END,
-                    category_code = CASE WHEN excluded.category_code != '' THEN excluded.category_code ELSE products.category_code END,
-                    social_code = CASE WHEN excluded.social_code != '' THEN excluded.social_code ELSE products.social_code END,
-                    cert_no = CASE WHEN excluded.cert_no != '' THEN excluded.cert_no ELSE products.cert_no END,
-                    status = CASE WHEN excluded.status != '' THEN excluded.status ELSE products.status END,
-                    product_type = CASE WHEN excluded.product_type != '' THEN excluded.product_type ELSE products.product_type END,
-                    phone = CASE WHEN excluded.phone != '' THEN excluded.phone ELSE products.phone END,
-                    email = CASE WHEN excluded.email != '' THEN excluded.email ELSE products.email END,
-                    scope = CASE WHEN excluded.scope != '' THEN excluded.scope ELSE products.scope END,
-                    safety_info = CASE WHEN excluded.safety_info != '' THEN excluded.safety_info ELSE products.safety_info END,
-                    last_updated = excluded.last_updated,
-                    source = excluded.source
-            ''', (
-                data['di_code'],
-                data['product_name'],
-                data['commercial_name'],
-                data['model'],
-                data['manufacturer'],
-                data['description'],
-                data['publish_date'],
-                datetime.now().isoformat(),
-                data['category_code'],
-                data['social_code'],
-                data['cert_no'],
-                data['status'],
-                data['product_type'],
-                data['phone'],
-                data['email'],
-                data['scope'],
-                data['safety_info'],
-            ))
-            count += 1
-            
-        self.conn.commit()
+                INSERT INTO sync_log (sync_date, data_date, file_name, records_count)
+                VALUES (?, ?, ?, ?)
+            ''', (datetime.now().strftime('%Y-%m-%d'), data_date, file_name, stats['total']))
 
-        for di_code, reason in rejected:
-            cursor.execute('''
-                INSERT INTO ingest_rejects (file_name, di_code, reason)
-                VALUES (?, ?, ?)
-            ''', (file_name, di_code, reason))
-        self.conn.commit()
-        
-        # 记录同步日志
-        cursor.execute('''
-            INSERT INTO sync_log (sync_date, file_name, records_count)
-            VALUES (?, ?, ?)
-        ''', (datetime.now().strftime('%Y-%m-%d'), os.path.basename(xml_file), count))
-        self.conn.commit()
+            # 提交最后一批
+            self.conn.commit()
 
-        self.log_sync_run(
-            os.path.basename(xml_file),
-            count,
-            'success',
-            invalid_records=len(rejected),
-            audit_records=audit_count,
-        )
-        
-        print(
-            f"[LocalLake] 导入完成。新增/更新记录数: {count}, "
-            f"拒绝记录: {len(rejected)}, 审计记录: {audit_count}"
-        )
-        if rejected:
-            sample = rejected[:5]
-            print(f"[LocalLake] 拒绝样例: {sample}")
-        return count
+            # 打印详细统计
+            print(f"\n[LocalLake] {'='*60}")
+            print(f"[LocalLake] 导入完成: {file_name}")
+            print(f"[LocalLake] {'='*60}")
+            print(f"[LocalLake] 总记录: {stats['total']}")
+            print(f"[LocalLake]   ├─ 新增: {stats['inserted']}")
+            print(f"[LocalLake]   ├─ 变更: {stats['updated']}")
+            print(f"[LocalLake]   ├─ 跳过: {stats['skipped']}")
+            print(f"[LocalLake]   └─ 拒绝: {stats['rejected']}")
+            print(f"[LocalLake] {'='*60}\n")
+
+            self.log_sync_run(
+                file_name,
+                stats['total'],
+                'success',
+                invalid_records=stats['rejected'],
+                audit_records=stats['audit_count'],
+            )
+
+            return stats
+
+        except Exception as e:
+            # 发生错误时回滚事务
+            self.conn.rollback()
+            print(f"\n[LocalLake] {'='*60}")
+            print(f"[LocalLake] ❌ 导入失败，事务已回滚")
+            print(f"[LocalLake] 错误: {e}")
+            print(f"[LocalLake] {'='*60}\n")
+            self.log_sync_run(
+                file_name,
+                0,
+                'failed',
+                error_message=str(e)
+            )
+            return {'total': 0, 'inserted': 0, 'updated': 0, 'skipped': 0, 'rejected': 0, 'error': str(e)}
     
     def get_last_sync_date(self):
         """获取最后同步日期"""
         cursor = self.conn.cursor()
-        cursor.execute('SELECT MAX(sync_date) FROM sync_log')
+        cursor.execute('''
+            SELECT MAX(
+                CASE
+                    WHEN data_date IS NOT NULL AND TRIM(data_date) != '' THEN data_date
+                    ELSE sync_date
+                END
+            )
+            FROM sync_log
+        ''')
         result = cursor.fetchone()
         return result[0] if result and result[0] else None
 

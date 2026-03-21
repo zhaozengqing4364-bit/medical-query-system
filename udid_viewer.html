@@ -4,8 +4,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>UDID 医疗器械智能查询系统</title>
-    <meta name="description" content="基于AI的医疗器械唯一标识(UDID)智能查询与匹配系统">
+    <title>高新医疗科技有限公司 - 医疗器械智能查询平台</title>
+    <meta name="description" content="高新医疗科技有限公司医疗器械智能查询平台，支持产品、规格型号与企业信息检索。">
 
     <!-- Google Fonts: Poppins + Open Sans -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -14,8 +14,8 @@
         href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;500;600;700&family=Poppins:wght@400;500;600;700&display=swap"
         rel="stylesheet">
 
-    <!-- Tailwind CSS CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Tailwind CSS -->
+    <script src="/tailwindcss.cdn.js"></script>
     <script>
         tailwind.config = {
             theme: {
@@ -238,8 +238,8 @@
                         </svg>
                     </div>
                     <div>
-                        <h1 class="text-lg font-heading font-semibold text-text">UDID 智能查询</h1>
-                        <p class="text-xs text-text-muted">医疗器械唯一标识数据库</p>
+                        <h1 class="text-lg font-heading font-semibold text-text">高新医疗科技有限公司</h1>
+                        <p class="text-xs text-text-muted">医疗器械智能查询平台</p>
                     </div>
                 </div>
 
@@ -300,7 +300,7 @@
                         class="w-full pl-12 pr-4 py-3 border border-border rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all text-sm"
                         onkeyup="handleSearchKeyup(event)">
                 </div>
-                <button onclick="searchProducts()"
+                <button onclick="searchProductsFromStart()"
                     class="flex items-center justify-center gap-2 px-6 py-3 bg-primary hover:bg-primary-dark text-white font-medium rounded-xl transition-colors cursor-pointer">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -371,6 +371,55 @@
                 </button>
             </div>
 
+            <!-- 招标信息智能解析区域 -->
+            <div id="bidParseSection" class="border-t border-border pt-4 mb-4">
+                <div class="flex items-center justify-between mb-3">
+                    <div class="flex items-center gap-2">
+                        <div class="w-6 h-6 bg-gradient-to-br from-purple-500 to-purple-400 rounded-lg flex items-center justify-center">
+                            <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                        </div>
+                        <span class="font-heading font-medium text-sm">招标信息智能解析</span>
+                        <span class="px-2 py-0.5 text-xs bg-purple-100 text-purple-600 rounded-full">AI 解析</span>
+                    </div>
+                </div>
+                <div class="flex flex-col gap-3">
+                    <div>
+                        <label class="block text-xs text-text-muted mb-1">粘贴招标信息（支持口语化描述）</label>
+                        <textarea id="bidTextInput" rows="3" 
+                            placeholder="如：负压支架 用于手术废液及痰液收集的装置 双瓶带架子"
+                            class="w-full px-4 py-2.5 border border-border rounded-xl focus:ring-2 focus:ring-purple-200 focus:border-purple-400 outline-none transition-all text-sm resize-none"></textarea>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <div id="parseResult" class="hidden flex items-center gap-2 text-sm">
+                            <span class="text-text-muted">解析结果：</span>
+                            <span id="parseProductName" class="px-2 py-1 bg-green-50 text-green-700 rounded-lg font-medium"></span>
+                            <span id="parseSpecs" class="px-2 py-1 bg-blue-50 text-blue-700 rounded-lg"></span>
+                        </div>
+                        <div class="flex gap-2">
+                            <button id="btnParseBid" onclick="parseBidText()"
+                                class="flex items-center justify-center gap-2 px-5 py-2.5 bg-purple-500 hover:bg-purple-600 text-white font-medium rounded-xl transition-colors cursor-pointer whitespace-nowrap">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                </svg>
+                                AI 解析
+                            </button>
+                            <button id="btnAutoMatch" onclick="parseAndMatch()" 
+                                class="hidden flex items-center justify-center gap-2 px-5 py-2.5 bg-accent hover:bg-accent-light text-white font-medium rounded-xl transition-colors cursor-pointer whitespace-nowrap">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                </svg>
+                                自动匹配
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- AI Match Section (Collapsible) -->
             <div id="aiMatchSection" class="border-t border-border pt-4">
                 <div class="flex items-center justify-between mb-3">
@@ -390,12 +439,17 @@
                     <div class="flex flex-col lg:flex-row gap-3">
                         <div class="flex-1">
                             <label class="block text-xs text-text-muted mb-1">采购项目名称 <span class="text-red-400">*</span></label>
-                            <input type="text" id="aiProductName" placeholder="如：注射用交联透明质酸钠凝胶"
+                            <input type="text" id="aiProductName" placeholder="如：负压引流器、医疗废液收集装置"
+                                class="w-full px-4 py-2.5 border border-border rounded-xl focus:ring-2 focus:ring-accent/20 focus:border-accent outline-none transition-all text-sm">
+                        </div>
+                        <div class="w-full lg:w-48">
+                            <label class="block text-xs text-text-muted mb-1">规格型号</label>
+                            <input type="text" id="aiSpecs" placeholder="如：双瓶2000ml"
                                 class="w-full px-4 py-2.5 border border-border rounded-xl focus:ring-2 focus:ring-accent/20 focus:border-accent outline-none transition-all text-sm">
                         </div>
                         <div class="flex-1">
-                            <label class="block text-xs text-text-muted mb-1">参数需求（规格/功能）</label>
-                            <input type="text" id="aiRequirement" placeholder="如：适用于面部真皮组织中层至深层注射 0.8ml/支"
+                            <label class="block text-xs text-text-muted mb-1">参数需求（功能/用途）</label>
+                            <input type="text" id="aiRequirement" placeholder="如：用于手术废液及痰液收集"
                                 class="w-full px-4 py-2.5 border border-border rounded-xl focus:ring-2 focus:ring-accent/20 focus:border-accent outline-none transition-all text-sm">
                         </div>
                     </div>
@@ -425,7 +479,7 @@
                 <div class="flex items-center gap-2">
                     <label class="flex items-center gap-2 text-sm text-text-muted cursor-pointer mr-4 select-none">
                         <input type="checkbox" id="mergeToggle"
-                            class="w-4 h-4 text-primary rounded border-border focus:ring-primary" checked
+                            class="w-4 h-4 text-primary rounded border-border focus:ring-primary"
                             onchange="toggleMergeMode()">
                         <span>按企业合并</span>
                     </label>
@@ -591,7 +645,7 @@
             </div>
             
             <div class="flex gap-3">
-                <button onclick="testAiConnection()"
+                <button onclick="testAiConnection(event)"
                     class="px-4 py-2.5 border border-primary text-primary rounded-xl text-sm font-medium hover:bg-primary/5 transition-colors cursor-pointer whitespace-nowrap">测试连接</button>
                 <button onclick="hideSettingsModal()"
                     class="flex-1 px-4 py-2.5 border border-border rounded-xl text-sm font-medium hover:bg-surface transition-colors cursor-pointer">取消</button>
@@ -656,14 +710,43 @@
     <!-- JavaScript -->
     <script>
         // ==========================================
+        // 安全工具函数
+        // ==========================================
+        function escapeHtml(text) {
+            if (text === null || text === undefined) return '';
+            const div = document.createElement('div');
+            div.textContent = String(text);
+            return div.innerHTML;
+        }
+
+        function getAuthHeaders(baseHeaders = {}) {
+            const headers = { ...baseHeaders };
+            if (csrfToken) {
+                headers['X-CSRF-Token'] = csrfToken;
+            }
+            return headers;
+        }
+
+        // ==========================================
         // 配置
         // ==========================================
-        const API_BASE = 'http://localhost:8080/api';
+        const API_BASE = '/api';
+        let csrfToken = '';
         let currentPage = 1;
         let totalResults = 0;
         const PAGE_SIZE = 50;
         let currentRawProducts = []; // Store raw data for client-side filtering
-        let isMergeEnabled = true;   // Default to merged view
+        let isMergeEnabled = false;  // Default to unmerged view
+
+        // ==========================================
+        // 前端缓存机制
+        // ==========================================
+        let pageCache = {};  // 缓存页面数据 { pageNumber: { data: [], timestamp: xxx } }
+        const CACHE_MAX_PAGES = 5;  // 最多缓存5页
+        const CACHE_EXPIRY = 5 * 60 * 1000; // 缓存有效期5分钟
+        let isLightLoading = false; // 轻量级加载标记（翻页时不显示 skeleton）
+        let preloadTimer = null;
+        let preloadAbortController = null;
 
         // ==========================================
         // 初始化
@@ -679,20 +762,30 @@
         // ==========================================
         // 认证检查
         // ==========================================
+        let currentUser = null;
+
         async function checkAuth() {
             try {
                 const res = await fetch(`${API_BASE}/auth/me`, { credentials: 'include' });
                 const data = await res.json();
                 if (data.success && data.data) {
+                    currentUser = data.data;
+                    csrfToken = data.data.csrf_token || '';
                     const userEl = document.getElementById('userInfo');
                     const role = data.data.role === 'admin' ? '管理员' : '用户';
+                    // 使用 textContent 安全设置用户名，防止 XSS
                     userEl.innerHTML = `
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                         </svg>
-                        <span>${data.data.username}</span>
-                        <span class="text-xs opacity-70">(${role})</span>
                     `;
+                    const usernameSpan = document.createElement('span');
+                    usernameSpan.textContent = data.data.username;
+                    userEl.appendChild(usernameSpan);
+                    const roleSpan = document.createElement('span');
+                    roleSpan.className = 'text-xs opacity-70';
+                    roleSpan.textContent = `(${role})`;
+                    userEl.appendChild(roleSpan);
                 } else {
                     // 未登录，跳转到登录页
                     window.location.href = '/login';
@@ -713,12 +806,16 @@
         }
 
         async function loadLatestProducts() {
+            cancelPreloadNextPage();
             showLoading();
             try {
                 // 快速加载最新数据（无筛选条件，使用缓存总数）
-                const res = await fetch(`${API_BASE}/search?page_size=50`);
+                const res = await fetch(`${API_BASE}/search?page_size=50`, { credentials: 'include' });
                 const data = await res.json();
                 if (data.success) {
+                    isAiMatchMode = false; // 重置为普通搜索模式
+                    aiMatchPage = 1; // 重置智能匹配分页
+                    aiMatchAllResults = []; // 清空智能匹配结果
                     totalResults = data.total;
                     currentRawProducts = data.data || [];
                     updateView();
@@ -736,7 +833,7 @@
         // ==========================================
         async function loadStats() {
             try {
-                const res = await fetch(`${API_BASE}/stats`);
+                const res = await fetch(`${API_BASE}/stats`, { credentials: 'include' });
                 const data = await res.json();
                 if (data.success) {
                     document.getElementById('statsTotalProducts').textContent = data.data.total_products.toLocaleString();
@@ -749,10 +846,18 @@
 
         let currentMatchMode = 'vector'; // 统一使用向量检索
 
+        // 智能匹配专用变量（前端分页）
+        let aiMatchAllResults = []; // 存储所有结果
+        let aiMatchPage = 1;
+        let aiMatchFilteredTotal = 0;
+        let aiMatchPageSize = 50;
+        let isAiMatchMode = false; // 标记当前是否为智能匹配模式
+
         async function smartMatch() {
             const productName = document.getElementById('aiProductName').value.trim();
+            const specs = document.getElementById('aiSpecs').value.trim();
             const requirement = document.getElementById('aiRequirement').value.trim();
-            
+
             if (!productName) {
                 showToast('请输入采购项目名称');
                 document.getElementById('aiProductName').focus();
@@ -774,25 +879,36 @@
                     manufacturer: document.getElementById('filterManufacturer').value
                 };
 
-                // 两阶段检索：产品名称过滤 + 参数需求排序
+                // 三阶段检索：产品名称过滤 → 规格型号过滤 → 参数需求向量排序
+                // 关键：一次性返回所有结果，前端分页
                 const res = await fetch(`${API_BASE}/ai-match`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
+                    credentials: 'include',
+                    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+                    body: JSON.stringify({
                         product_name: productName,  // 产品名称（用于第一阶段过滤）
+                        specs: specs,               // 规格型号（用于第二阶段过滤）
                         requirement: requirement,    // 参数需求（用于向量排序）
-                        filters, 
-                        use_vector: true 
+                        filters,
+                        use_vector: true,
+                        page: 1,
+                        page_size: 1000,  // 一次性获取所有结果（最多1000条）
+                        min_score: 50  // 最低匹配分数50%
                     })
                 });
                 const data = await res.json();
 
                 if (data.success) {
-                    currentRawProducts = data.data || [];
-                    updateView();
-                    const matchCount = data.data ? data.data.length : 0;
-                    showToast(`匹配完成，找到 ${matchCount} 个不同厂家的产品`);
-                    document.getElementById('resultCount').textContent = `${matchCount} 条`;
+                    aiMatchPage = 1;
+                    aiMatchFilteredTotal = data.filtered_total || 0;
+                    isAiMatchMode = true;
+
+                    // 保存所有结果
+                    aiMatchAllResults = data.data || [];
+
+                    // 前端分页显示
+                    updateAiMatchView();
+                    showToast(`匹配完成，共 ${aiMatchFilteredTotal} 条结果`);
                 } else {
                     showToast(data.error || '匹配失败');
                 }
@@ -806,8 +922,182 @@
             btn.innerHTML = originalText;
         }
 
-        async function searchProducts() {
-            showLoading();
+        // 前端分页显示智能匹配结果
+        function updateAiMatchView() {
+            const startIdx = (aiMatchPage - 1) * aiMatchPageSize;
+            const endIdx = startIdx + aiMatchPageSize;
+            currentRawProducts = aiMatchAllResults.slice(startIdx, endIdx);
+
+            updateView();
+            updateAiMatchPagination();
+        }
+
+        // ==========================================
+        // 招标信息智能解析
+        // ==========================================
+        let lastParseResult = null;
+
+        async function parseBidText() {
+            const bidText = document.getElementById('bidTextInput').value.trim();
+            
+            if (!bidText) {
+                showToast('请输入招标信息');
+                document.getElementById('bidTextInput').focus();
+                return;
+            }
+
+            const btn = document.getElementById('btnParseBid');
+            btn.classList.add('btn-loading');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<svg class="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> 解析中...';
+
+            try {
+                const res = await fetch(`${API_BASE}/parse-bid`, {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+                    body: JSON.stringify({ bid_text: bidText })
+                });
+                const data = await res.json();
+
+                if (data.success && data.data) {
+                    lastParseResult = data.data;
+                    
+                    // 显示解析结果
+                    const parseResultEl = document.getElementById('parseResult');
+                    const productNameEl = document.getElementById('parseProductName');
+                    const specsEl = document.getElementById('parseSpecs');
+                    
+                    productNameEl.textContent = data.data.product_name || '未识别';
+                    specsEl.textContent = data.data.specs || '';
+                    specsEl.style.display = data.data.specs ? 'inline' : 'none';
+                    parseResultEl.classList.remove('hidden');
+                    
+                    // 自动填充到智能匹配输入框（三个字段分开填充）
+                    document.getElementById('aiProductName').value = data.data.product_name || '';
+                    document.getElementById('aiSpecs').value = data.data.specs || '';
+                    document.getElementById('aiRequirement').value = data.data.requirement || '';
+                    
+                    // 显示自动匹配按钮
+                    document.getElementById('btnAutoMatch').classList.remove('hidden');
+                    
+                    showToast(`解析成功：${data.data.product_name}`);
+                } else {
+                    showToast(data.error || '解析失败');
+                }
+            } catch (e) {
+                console.error(e);
+                showToast('请求失败，请检查网络或后端服务');
+            }
+
+            btn.classList.remove('btn-loading');
+            btn.innerHTML = originalText;
+        }
+
+        async function parseAndMatch() {
+            // 如果已有解析结果，直接触发匹配
+            if (lastParseResult && lastParseResult.product_name) {
+                // 确保输入框已填充（三个字段分开）
+                document.getElementById('aiProductName').value = lastParseResult.product_name;
+                document.getElementById('aiSpecs').value = lastParseResult.specs || '';
+                document.getElementById('aiRequirement').value = lastParseResult.requirement || '';
+                
+                // 触发智能匹配
+                await smartMatch();
+            } else {
+                // 先解析再匹配
+                await parseBidText();
+                if (lastParseResult && lastParseResult.product_name) {
+                    await smartMatch();
+                }
+            }
+        }
+
+        // 生成缓存 key（基于搜索参数）
+        function getCacheKey() {
+            return JSON.stringify({
+                keyword: document.getElementById('searchKeyword').value,
+                status: document.getElementById('filterStatus').value,
+                type: document.getElementById('filterType').value,
+                category_code: document.getElementById('filterCategory').value,
+                manufacturer: document.getElementById('filterManufacturer').value,
+                cert_no: document.getElementById('filterCertNo').value,
+                model: document.getElementById('filterModel').value,
+                commercial_name: document.getElementById('filterCommercialName').value,
+                date_from: document.getElementById('filterDateFrom').value,
+                date_to: document.getElementById('filterDateTo').value,
+                page: currentPage
+            });
+        }
+
+        // 清理过期缓存
+        function cleanExpiredCache() {
+            const now = Date.now();
+            for (const key in pageCache) {
+                if (now - pageCache[key].timestamp > CACHE_EXPIRY) {
+                    delete pageCache[key];
+                }
+            }
+        }
+
+        // 限制缓存大小
+        function limitCacheSize() {
+            const keys = Object.keys(pageCache);
+            if (keys.length > CACHE_MAX_PAGES) {
+                // 删除最旧的缓存
+                const oldestKey = keys.reduce((oldest, key) =>
+                    pageCache[key].timestamp < pageCache[oldest].timestamp ? key : oldest
+                );
+                delete pageCache[oldestKey];
+            }
+        }
+
+        function cancelPreloadNextPage() {
+            if (preloadTimer) {
+                clearTimeout(preloadTimer);
+                preloadTimer = null;
+            }
+            if (preloadAbortController) {
+                preloadAbortController.abort();
+                preloadAbortController = null;
+            }
+        }
+
+        // 从第1页开始搜索（点击搜索按钮时调用）
+        function searchProductsFromStart() {
+            currentPage = 1;  // 重置到第1页
+            pageCache = {};   // 清空缓存（搜索条件变化）
+            cancelPreloadNextPage();
+            searchProducts();
+        }
+
+        // 搜索产品（支持缓存）
+        async function searchProducts(useCache = true) {
+            cancelPreloadNextPage();
+            const cacheKey = getCacheKey();
+
+            // 检查缓存（仅当使用缓存且不是轻量级加载时）
+            if (useCache && pageCache[cacheKey] && !isLightLoading) {
+                const cached = pageCache[cacheKey];
+                // 缓存有效期内
+                if (Date.now() - cached.timestamp < CACHE_EXPIRY) {
+                    currentRawProducts = cached.data;
+                    totalResults = cached.total;
+                    isAiMatchMode = false;
+                    aiMatchPage = 1;
+                    aiMatchAllResults = [];
+                    updateView();
+                    updatePagination(totalResults, currentPage);
+                    return;
+                }
+            }
+
+            // 轻量级加载：只显示表格 loading，不清空整个表格
+            if (isLightLoading) {
+                showTableLoading();
+            } else {
+                showLoading();
+            }
 
             const params = new URLSearchParams({
                 keyword: document.getElementById('searchKeyword').value,
@@ -826,12 +1116,25 @@
             });
 
             try {
-                const res = await fetch(`${API_BASE}/search?${params}`);
+                const res = await fetch(`${API_BASE}/search?${params}`, { credentials: 'include' });
                 const data = await res.json();
 
                 if (data.success) {
+                    isAiMatchMode = false; // 重置为普通搜索模式
+                    aiMatchPage = 1; // 重置智能匹配分页
+                    aiMatchAllResults = []; // 清空智能匹配结果
                     totalResults = data.total;
                     currentRawProducts = data.data || [];
+
+                    // 存入缓存
+                    pageCache[cacheKey] = {
+                        data: currentRawProducts,
+                        total: totalResults,
+                        timestamp: Date.now()
+                    };
+                    cleanExpiredCache();
+                    limitCacheSize();
+
                     updateView();
                     updatePagination(data.total, data.page);
                 }
@@ -840,10 +1143,16 @@
                 showEmpty();
             }
 
-            hideLoading();
+            if (isLightLoading) {
+                hideTableLoading();
+            } else {
+                hideLoading();
+            }
+            isLightLoading = false;
         }
 
         function clearFilters() {
+            cancelPreloadNextPage();
             document.getElementById('searchKeyword').value = '';
             document.getElementById('filterStatus').value = '';
             document.getElementById('filterType').value = '';
@@ -854,9 +1163,23 @@
             document.getElementById('filterCommercialName').value = '';
             document.getElementById('filterDateFrom').value = '';
             document.getElementById('filterDateTo').value = '';
+            // 清除招标解析区域
+            document.getElementById('bidTextInput').value = '';
+            document.getElementById('aiProductName').value = '';
+            document.getElementById('aiSpecs').value = '';
+            document.getElementById('aiRequirement').value = '';
+            document.getElementById('parseResult').classList.add('hidden');
+            document.getElementById('btnAutoMatch').classList.add('hidden');
+            lastParseResult = null;
+
+            // 重置分页和模式状态
             currentPage = 1;
+            isAiMatchMode = false;
+            aiMatchPage = 1;
+            aiMatchAllResults = [];
+            pageCache = {}; // 清空缓存
+
             loadLatestProducts();
-            showToast('已清除筛选条件');
             showToast('已清除筛选条件');
         }
 
@@ -887,7 +1210,53 @@
             }
 
             renderResults(displayProducts);
-            document.getElementById('resultCount').textContent = `${displayProducts.length} 条`;
+
+            // 根据模式显示不同的计数信息
+            if (isAiMatchMode) {
+                // 智能匹配模式：显示总数和当前页信息
+                const totalPages = Math.ceil(aiMatchAllResults.length / aiMatchPageSize);
+                document.getElementById('resultCount').textContent =
+                    `${aiMatchAllResults.length.toLocaleString()} 条 (第${aiMatchPage}/${totalPages}页)`;
+                // 更新智能匹配分页UI
+                updateAiMatchPagination();
+            } else {
+                // 普通搜索模式
+                const totalDisplay = totalResults.toLocaleString();
+                const showingDisplay = displayProducts.length !== totalResults
+                    ? ` (显示 ${displayProducts.length.toLocaleString()} 条)`
+                    : '';
+                document.getElementById('resultCount').textContent = `${totalDisplay} 条${showingDisplay}`;
+            }
+        }
+
+        // 更新智能匹配分页UI（前端分页）
+        function updateAiMatchPagination() {
+            const paginationEl = document.getElementById('pagination');
+            const paginationInfoEl = document.getElementById('paginationInfo');
+            const btnPrev = document.getElementById('btnPrevPage');
+            const btnNext = document.getElementById('btnNextPage');
+            const pageNumberEl = document.getElementById('pageNumber');
+
+            if (!paginationEl || !isAiMatchMode) return;
+
+            const totalPages = Math.ceil(aiMatchAllResults.length / aiMatchPageSize);
+
+            // 显示分页控件
+            paginationEl.classList.remove('hidden');
+
+            // 更新分页信息
+            const startNum = (aiMatchPage - 1) * aiMatchPageSize + 1;
+            const endNum = Math.min(startNum + currentRawProducts.length - 1, aiMatchAllResults.length);
+            paginationInfoEl.textContent = `显示 ${startNum}-${endNum} 条，共 ${aiMatchAllResults.length.toLocaleString()} 条`;
+
+            // 更新页码显示
+            pageNumberEl.textContent = `${aiMatchPage} / ${totalPages}`;
+
+            // 更新按钮状态
+            btnPrev.disabled = aiMatchPage <= 1;
+            btnNext.disabled = aiMatchPage >= totalPages;
+
+            // 注意：不再修改 onclick，统一由 prevPage/nextPage 根据 isAiMatchMode 处理
         }
 
         // ==========================================
@@ -930,25 +1299,32 @@
                         <div class="text-sm text-text">${escapeHtml(p.manufacturer) || '-'}</div>
                         <div class="flex gap-1 mt-1 flex-wrap">
                             <div class="relative inline-block">
-                                <button onmouseenter="showSpecsPopup(this, '${escapeHtml(p.manufacturer)}', '${escapeHtml(p.product_name)}')" 
-                                        onmouseleave="hideSpecsPopup()"
-                                        class="px-1.5 py-0.5 text-xs bg-primary/10 hover:bg-primary/20 text-primary rounded transition-colors cursor-pointer">
+                                <button class="js-more-specs-btn px-1.5 py-0.5 text-xs bg-primary/10 hover:bg-primary/20 text-primary rounded transition-colors cursor-pointer"
+                                        data-manufacturer="${escapeHtmlAttr(p.manufacturer)}"
+                                        data-product-name="${escapeHtmlAttr(p.product_name)}">
                                     更多规格
                                 </button>
                             </div>
-                            <button onclick="openExternalLink('baidu', '${escapeHtml(p.manufacturer)}')" class="px-1.5 py-0.5 text-xs bg-surface hover:bg-primary/10 text-text-muted hover:text-primary rounded transition-colors cursor-pointer" title="百度搜索">百度</button>
-                            <button onclick="openExternalLink('tianyancha', '${escapeHtml(p.manufacturer)}')" class="px-1.5 py-0.5 text-xs bg-surface hover:bg-primary/10 text-text-muted hover:text-primary rounded transition-colors cursor-pointer" title="天眼查">天眼查</button>
+                            <button class="js-external-link px-1.5 py-0.5 text-xs bg-surface hover:bg-primary/10 text-text-muted hover:text-primary rounded transition-colors cursor-pointer"
+                                    data-platform="bing"
+                                    data-name="${escapeHtmlAttr(p.manufacturer)}"
+                                    title="必应搜索">必应</button>
+                            <button class="js-external-link px-1.5 py-0.5 text-xs bg-surface hover:bg-primary/10 text-text-muted hover:text-primary rounded transition-colors cursor-pointer"
+                                    data-platform="riskbird"
+                                    data-name="${escapeHtmlAttr(p.manufacturer)}"
+                                    data-entid="${escapeHtmlAttr(p.riskbird_entid || p.manufacturer_riskbird_entid || '')}"
+                                    title="风鸟企业查询">风鸟</button>
                         </div>
                     </td>
                     <td class="px-4 py-3 max-w-[200px]">
-                        <p class="text-sm text-text-muted ${scopeNeedsHover ? 'truncate-hover' : ''}"
-                           ${scopeNeedsHover ? `onmouseenter="showHoverCard(event, '适用范围', '${escapeAttr(scopeText)}')" onmouseleave="hideHoverCard()"` : ''}>
+                        <p class="text-sm text-text-muted ${scopeNeedsHover ? 'truncate-hover js-hover-card-trigger' : ''}"
+                           ${scopeNeedsHover ? `data-hover-title="适用范围" data-hover-content="${escapeHtmlAttr(scopeText)}"` : ''}>
                             ${highlightKeywords(escapeHtml(truncatedScope)) || '<span class="text-text-light">-</span>'}
                         </p>
                     </td>
                     <td class="px-4 py-3 max-w-[240px]">
-                        <p class="text-sm text-text-muted ${descNeedsHover ? 'truncate-hover' : ''}"
-                           ${descNeedsHover ? `onmouseenter="showHoverCard(event, '产品描述', '${escapeAttr(descText)}')" onmouseleave="hideHoverCard()"` : ''}>
+                        <p class="text-sm text-text-muted ${descNeedsHover ? 'truncate-hover js-hover-card-trigger' : ''}"
+                           ${descNeedsHover ? `data-hover-title="产品描述" data-hover-content="${escapeHtmlAttr(descText)}"` : ''}>
                             ${highlightKeywords(escapeHtml(truncatedDesc)) || '<span class="text-text-light">暂无描述</span>'}
                         </p>
                     </td>
@@ -968,10 +1344,13 @@
                         ` : '<span class="text-text-light">-</span>'}
                     </td>
                     <td class="px-4 py-3">
-                        <button onclick="copyToClipboard('${escapeHtml(p.di_code)}')" class="px-2 py-1 text-xs text-text-muted hover:text-primary hover:bg-primary/5 rounded transition-colors cursor-pointer">复制 DI</button>
+                        <button class="js-copy-di px-2 py-1 text-xs text-text-muted hover:text-primary hover:bg-primary/5 rounded transition-colors cursor-pointer"
+                                data-di-code="${escapeHtmlAttr(p.di_code)}">复制 DI</button>
                     </td>
                 </tr>
             `}).join('');
+
+            bindResultTableEvents(tbody);
         }
         
         // 文本截断
@@ -1000,10 +1379,45 @@
             return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         }
         
-        // 属性转义（用于 HTML 属性）
-        function escapeAttr(text) {
-            if (!text) return '';
-            return text.replace(/'/g, "\\'").replace(/"/g, '\\"').replace(/\n/g, '\\n');
+        // 属性转义（用于 HTML data-* 属性）
+        function escapeHtmlAttr(text) {
+            if (text == null) return '';
+            return String(text)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;')
+                .replace(/\r/g, '&#13;')
+                .replace(/\n/g, '&#10;');
+        }
+
+        function bindResultTableEvents(tbody) {
+            tbody.querySelectorAll('.js-more-specs-btn').forEach((btn) => {
+                btn.addEventListener('mouseenter', () => {
+                    showSpecsPopup(btn, btn.dataset.manufacturer || '', btn.dataset.productName || '');
+                });
+                btn.addEventListener('mouseleave', () => hideSpecsPopup());
+            });
+
+            tbody.querySelectorAll('.js-external-link').forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    openExternalLink(btn.dataset.platform || '', btn.dataset.name || '', btn.dataset.entid || '');
+                });
+            });
+
+            tbody.querySelectorAll('.js-copy-di').forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    copyToClipboard(btn.dataset.diCode || '');
+                });
+            });
+
+            tbody.querySelectorAll('.js-hover-card-trigger').forEach((el) => {
+                el.addEventListener('mouseenter', (event) => {
+                    showHoverCard(event, el.dataset.hoverTitle || '', el.dataset.hoverContent || '');
+                });
+                el.addEventListener('mouseleave', () => hideHoverCard());
+            });
         }
         
         // Hover Card 显示
@@ -1020,7 +1434,7 @@
                 titleEl.textContent = title;
                 
                 // 高亮关键词
-                let highlightedContent = escapeHtml(content.replace(/\\n/g, '\n').replace(/\\'/g, "'").replace(/\\"/g, '"'));
+                let highlightedContent = escapeHtml(content || '');
                 currentHighlightKeywords.forEach(kw => {
                     if (kw && kw.length >= 2) {
                         const regex = new RegExp(escapeRegExp(kw), 'gi');
@@ -1069,42 +1483,133 @@
         // ==========================================
         function updatePagination(total, page) {
             const pagination = document.getElementById('pagination');
+            const btnPrev = document.getElementById('btnPrevPage');
+            const btnNext = document.getElementById('btnNextPage');
+
             if (total > PAGE_SIZE) {
                 pagination.classList.remove('hidden');
                 const start = (page - 1) * PAGE_SIZE + 1;
                 const end = Math.min(page * PAGE_SIZE, total);
                 document.getElementById('paginationInfo').textContent = `显示 ${start}-${end} 条，共 ${total} 条`;
                 document.getElementById('pageNumber').textContent = page;
-                document.getElementById('btnPrevPage').disabled = page <= 1;
-                document.getElementById('btnNextPage').disabled = page * PAGE_SIZE >= total;
+                btnPrev.disabled = page <= 1;
+                btnNext.disabled = page * PAGE_SIZE >= total;
+
+                // 注意：不再修改 onclick，统一由 prevPage/nextPage 根据 isAiMatchMode 处理
             } else {
                 pagination.classList.add('hidden');
             }
         }
 
         function prevPage() {
-            if (currentPage > 1) {
-                currentPage--;
-                searchProducts();
+            if (isAiMatchMode) {
+                // 智能匹配模式：前端分页
+                if (aiMatchPage > 1) {
+                    aiMatchPage--;
+                    updateAiMatchView();
+                }
+            } else {
+                // 普通搜索模式：后端分页
+                if (currentPage > 1) {
+                    currentPage--;
+                    isLightLoading = true; // 使用轻量级加载
+                    searchProducts();
+                }
             }
         }
 
         function nextPage() {
-            if (currentPage * PAGE_SIZE < totalResults) {
-                currentPage++;
-                searchProducts();
+            if (isAiMatchMode) {
+                // 智能匹配模式：前端分页
+                const totalPages = Math.ceil(aiMatchAllResults.length / aiMatchPageSize);
+                if (aiMatchPage < totalPages) {
+                    aiMatchPage++;
+                    updateAiMatchView();
+                }
+            } else {
+                // 普通搜索模式：后端分页
+                if (currentPage * PAGE_SIZE < totalResults) {
+                    currentPage++;
+                    isLightLoading = true; // 使用轻量级加载
+                    searchProducts();
+
+                    // 预加载下一页数据
+                    preloadNextPage();
+                }
             }
+        }
+
+        // 预加载下一页数据
+        async function preloadNextPage() {
+            const nextPageNum = currentPage + 1;
+            if (nextPageNum * PAGE_SIZE > totalResults) return;
+            cancelPreloadNextPage();
+
+            // 检查是否已有缓存
+            const originalPage = currentPage;
+            currentPage = nextPageNum;
+            const cacheKey = getCacheKey();
+            currentPage = originalPage; // 恢复当前页
+
+            if (pageCache[cacheKey]) return; // 已有缓存，不需要预加载
+
+            // 延迟 500ms 后开始预加载（避免与当前页请求冲突）
+            preloadTimer = setTimeout(async () => {
+                preloadTimer = null;
+                preloadAbortController = new AbortController();
+                try {
+                    const params = new URLSearchParams({
+                        keyword: document.getElementById('searchKeyword').value,
+                        status: document.getElementById('filterStatus').value,
+                        type: document.getElementById('filterType').value,
+                        category_code: document.getElementById('filterCategory').value,
+                        manufacturer: document.getElementById('filterManufacturer').value,
+                        cert_no: document.getElementById('filterCertNo').value,
+                        model: document.getElementById('filterModel').value,
+                        commercial_name: document.getElementById('filterCommercialName').value,
+                        date_from: document.getElementById('filterDateFrom').value,
+                        date_to: document.getElementById('filterDateTo').value,
+                        page: nextPageNum,
+                        page_size: PAGE_SIZE
+                    });
+
+                    const res = await fetch(`${API_BASE}/search?${params}`, {
+                        credentials: 'include',
+                        signal: preloadAbortController.signal
+                    });
+                    const data = await res.json();
+
+                    if (data.success) {
+                        pageCache[cacheKey] = {
+                            data: data.data || [],
+                            total: data.total,
+                            timestamp: Date.now()
+                        };
+                        console.log(`预加载第 ${nextPageNum} 页完成`);
+                    }
+                } catch (e) {
+                    if (e && e.name === 'AbortError') {
+                        return;
+                    }
+                    // 预加载失败不影响用户体验
+                    console.log(`预加载第 ${nextPageNum} 页失败`, e);
+                } finally {
+                    preloadAbortController = null;
+                }
+            }, 500);
         }
 
         function handleSearchKeyup(e) {
             if (e.key === 'Enter') {
                 currentPage = 1;
+                pageCache = {}; // 清空缓存（搜索条件变化）
+                cancelPreloadNextPage();
                 searchProducts();
             }
         }
 
         function goAdmin() {
-            window.location.href = '/login';
+            window.location.href = '/admin';
         }
 
         // ==========================================
@@ -1122,6 +1627,8 @@
             try {
                 const res = await fetch(`${API_BASE}/upload`, {
                     method: 'POST',
+                    credentials: 'include',
+                    headers: getAuthHeaders(),
                     body: formData
                 });
                 const data = await res.json();
@@ -1159,15 +1666,25 @@
             document.getElementById('syncProgress').classList.remove('hidden');
 
             try {
-                const res = await fetch(`${API_BASE}/sync`, { method: 'POST' });
+                const res = await fetch(`${API_BASE}/sync`, {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: getAuthHeaders()
+                });
                 const data = await res.json();
 
                 document.getElementById('syncProgress').classList.add('hidden');
                 document.getElementById('syncResult').classList.remove('hidden');
-                document.getElementById('syncResultText').textContent = data.message || '同步完成';
+                if (data.success) {
+                    document.getElementById('syncResultText').textContent = data.message || '同步完成';
+                } else {
+                    document.getElementById('syncResultText').textContent = data.error || '同步失败';
+                }
 
-                loadStats();
-                searchProducts();
+                if (data.success) {
+                    loadStats();
+                    searchProducts();
+                }
             } catch (e) {
                 document.getElementById('syncProgress').classList.add('hidden');
                 document.getElementById('syncResult').classList.remove('hidden');
@@ -1201,7 +1718,8 @@
 
                 const res = await fetch(`${API_BASE}/ai-match`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
                     body: JSON.stringify({ requirement, filters })
                 });
                 const data = await res.json();
@@ -1242,13 +1760,30 @@
 
         async function loadConfig() {
             try {
-                const res = await fetch(`${API_BASE}/config`);
+                const res = await fetch(`${API_BASE}/config`, { credentials: 'include' });
                 const data = await res.json();
                 if (data.success && data.data) {
                     document.getElementById('configApiUrl').value = data.data.api_base_url || '';
                     document.getElementById('configModel').value = data.data.model || 'gpt-4o-mini';
+                    const apiKeyEl = document.getElementById('configApiKey');
+                    if (apiKeyEl) {
+                        apiKeyEl.value = '';
+                        if (data.meta && data.meta.has_api_key) {
+                            apiKeyEl.placeholder = '已配置 (留空则不改)';
+                        } else {
+                            apiKeyEl.placeholder = 'sk-...';
+                        }
+                    }
                     document.getElementById('configEmbeddingApiUrl').value = data.data.embedding_api_url || '';
-                    document.getElementById('configEmbeddingApiKey').value = '';  // 不回显密码
+                    const embeddingKeyEl = document.getElementById('configEmbeddingApiKey');
+                    if (embeddingKeyEl) {
+                        embeddingKeyEl.value = '';
+                        if (data.meta && data.meta.has_embedding_api_key) {
+                            embeddingKeyEl.placeholder = '已配置 (留空则不改)';
+                        } else {
+                            embeddingKeyEl.placeholder = 'sk-...';
+                        }
+                    }
                     document.getElementById('configEmbeddingModel').value = data.data.embedding_model || 'text-embedding-3-small';
                 }
             } catch (e) { }
@@ -1256,7 +1791,7 @@
         
         async function loadEmbeddingStats() {
             try {
-                const res = await fetch(`${API_BASE}/embedding/stats`);
+                const res = await fetch(`${API_BASE}/embedding/stats`, { credentials: 'include' });
                 const data = await res.json();
                 if (data.success && data.data) {
                     const stats = data.data;
@@ -1277,7 +1812,8 @@
             try {
                 const res = await fetch(`${API_BASE}/embedding/test`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
                     body: JSON.stringify({
                         embedding_api_url: document.getElementById('configEmbeddingApiUrl').value,
                         embedding_api_key: document.getElementById('configEmbeddingApiKey').value,
@@ -1311,7 +1847,8 @@
             try {
                 const res = await fetch(`${API_BASE}/embedding/build`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
                     body: JSON.stringify({ force: false })
                 });
                 const data = await res.json();
@@ -1331,19 +1868,18 @@
             btn.disabled = false;
         }
 
-        async function testAiConnection() {
+        async function testAiConnection(evt) {
             const config = {
                 api_base_url: document.getElementById('configApiUrl').value,
                 api_key: document.getElementById('configApiKey').value,
                 model: document.getElementById('configModel').value
             };
 
-            if (!config.api_key) {
-                showToast('请填写 API Key');
+            const btn = evt?.target;
+            if (!btn) {
+                showToast('未找到触发按钮');
                 return;
             }
-
-            const btn = event.target;
             const originalText = btn.innerText;
             btn.innerText = '测试中...';
             btn.disabled = true;
@@ -1351,7 +1887,8 @@
             try {
                 const res = await fetch(`${API_BASE}/test-ai`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
                     body: JSON.stringify(config)
                 });
                 const data = await res.json();
@@ -1385,7 +1922,8 @@
             try {
                 const res = await fetch(`${API_BASE}/config`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
                     body: JSON.stringify(config)
                 });
                 const data = await res.json();
@@ -1404,21 +1942,53 @@
         // ==========================================
         // 外部链接
         // ==========================================
-        function openExternalLink(platform, name) {
+        function buildRiskbirdUrl(name, entId = '') {
+            const encodedName = encodeURIComponent(name);
+            const baseUrl = `https://www.riskbird.com/ent/${encodedName}.html`;
+            if (!entId) {
+                return baseUrl;
+            }
+            return `${baseUrl}?entid=${encodeURIComponent(entId)}`;
+        }
+
+        function openExternalLink(platform, name, entId = '') {
+            if (!name) {
+                return;
+            }
+
             const encodedName = encodeURIComponent(name);
             const urls = {
-                baidu: `https://www.baidu.com/s?wd=${encodedName}`,
-                tianyancha: `https://www.tianyancha.com/search?key=${encodedName}`,
-                qichacha: `https://www.qcc.com/web/search?key=${encodedName}`,
-                qixinbao: `https://www.qixin.com/search?key=${encodedName}`,
-                aiqicha: `https://aiqicha.baidu.com/s?q=${encodedName}`
+                bing: `https://www.bing.com/search?q=${encodedName}`,
+                riskbird: buildRiskbirdUrl(name, entId)
             };
-            window.open(urls[platform], '_blank');
+            const targetUrl = urls[platform];
+            if (!targetUrl) {
+                return;
+            }
+            window.open(targetUrl, '_blank');
         }
 
         // 规格悬浮弹窗
         let specsPopupTimer = null;
         let specsCache = {}; // 缓存已加载的规格
+        const SPECS_CACHE_TTL = 10 * 60 * 1000;
+        const SPECS_CACHE_MAX_ENTRIES = 200;
+
+        function trimSpecsCache() {
+            const now = Date.now();
+            for (const [key, entry] of Object.entries(specsCache)) {
+                if (!entry || !entry.timestamp || now - entry.timestamp > SPECS_CACHE_TTL) {
+                    delete specsCache[key];
+                }
+            }
+            const orderedKeys = Object.keys(specsCache).sort((a, b) => {
+                return specsCache[a].timestamp - specsCache[b].timestamp;
+            });
+            while (orderedKeys.length > SPECS_CACHE_MAX_ENTRIES) {
+                const oldestKey = orderedKeys.shift();
+                delete specsCache[oldestKey];
+            }
+        }
         
         async function showSpecsPopup(btn, manufacturer, productName) {
             // 清除隐藏定时器
@@ -1448,8 +2018,9 @@
             const cacheKey = `${manufacturer}|${productName}`;
             
             // 检查缓存
+            trimSpecsCache();
             if (specsCache[cacheKey]) {
-                renderSpecsPopup(popup, specsCache[cacheKey]);
+                renderSpecsPopup(popup, specsCache[cacheKey].specs);
             } else {
                 popup.innerHTML = '<div class="text-xs text-text-muted">加载中...</div>';
             }
@@ -1469,15 +2040,19 @@
             // 如果没有缓存，加载数据
             if (!specsCache[cacheKey]) {
                 try {
-                    const res = await fetch(`${API_BASE}/product-specs?manufacturer=${encodeURIComponent(manufacturer)}&product_name=${encodeURIComponent(productName)}`);
+                    const res = await fetch(`${API_BASE}/product-specs?manufacturer=${encodeURIComponent(manufacturer)}&product_name=${encodeURIComponent(productName)}`, { credentials: 'include' });
                     const data = await res.json();
                     
                     if (data.success) {
-                        specsCache[cacheKey] = data.data;
+                        specsCache[cacheKey] = {
+                            specs: data.data || [],
+                            timestamp: Date.now()
+                        };
+                        trimSpecsCache();
                         // 检查弹窗是否还存在
                         const currentPopup = document.getElementById('specsPopup');
                         if (currentPopup) {
-                            renderSpecsPopup(currentPopup, data.data);
+                            renderSpecsPopup(currentPopup, specsCache[cacheKey].specs);
                         }
                     }
                 } catch (e) {
@@ -1517,14 +2092,6 @@
             startHideTimer();
         }
 
-        // ==========================================
-        // 工具函数
-        // ==========================================
-        function escapeHtml(str) {
-            if (!str) return '';
-            return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-        }
-
         function copyToClipboard(text) {
             navigator.clipboard.writeText(text).then(() => {
                 showToast('已复制到剪贴板');
@@ -1538,6 +2105,33 @@
 
         function hideLoading() {
             document.getElementById('loadingSkeleton').classList.add('hidden');
+        }
+
+        // 轻量级加载（翻页时使用）：不清空表格，只显示轻量 loading 提示
+        function showTableLoading() {
+            const tbody = document.getElementById('resultsTable');
+            // 添加半透明遮罩效果
+            tbody.style.opacity = '0.5';
+            tbody.style.pointerEvents = 'none';
+
+            // 显示加载提示
+            const paginationInfo = document.getElementById('paginationInfo');
+            if (paginationInfo) {
+                paginationInfo.dataset.originalText = paginationInfo.textContent;
+                paginationInfo.innerHTML = '<span class="inline-flex items-center gap-1"><svg class="w-3 h-3 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> 加载中...</span>';
+            }
+        }
+
+        function hideTableLoading() {
+            const tbody = document.getElementById('resultsTable');
+            tbody.style.opacity = '1';
+            tbody.style.pointerEvents = 'auto';
+
+            // 恢复分页信息文本
+            const paginationInfo = document.getElementById('paginationInfo');
+            if (paginationInfo && paginationInfo.dataset.originalText) {
+                paginationInfo.textContent = paginationInfo.dataset.originalText;
+            }
         }
 
         function showEmpty() {

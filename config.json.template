@@ -1,0 +1,30 @@
+{
+  "_comment": "高新医疗科技有限公司 - 配置文件模板",
+  "_version": "1.0",
+  "_date": "2026-02-02",
+
+  "api_base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+  "model": "qwen-max",
+
+  "embedding_api_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+  "embedding_model": "text-embedding-v3",
+  "embedding_dim": 1024,
+  "embedding_batch_size": 10,
+
+  "db_backend": "postgres",
+  "postgres_host": "127.0.0.1",
+  "postgres_port": 5432,
+  "postgres_db": "udid_db",
+  "postgres_user": "udid_user",
+
+  "ai_min_score": 0,
+  "ai_retry_count": 1,
+  "ai_retry_backoff_sec": 1.0,
+  "ai_cache_ttl_sec": 300,
+  "ai_max_retries": 3,
+  "ai_timeout_sec": 60,
+  "ai_score_threshold": 70,
+
+  "search_recall_multiplier": 20,
+  "max_search_results": 100
+}

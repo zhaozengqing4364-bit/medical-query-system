@@ -1,0 +1,13 @@
+/var/log/gaoxin_medical/*.log {
+    daily
+    rotate 30
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 644 gaoxin gaoxin
+    sharedscripts
+    postrotate
+        systemctl reload gaoxin-medical
+    endscript
+}

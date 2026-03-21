@@ -4,13 +4,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>UDID 医疗器械管理系统 - 登录</title>
+    <title>高新医疗科技有限公司 - 登录</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
         href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;500;600;700&family=Poppins:wght@400;500;600;700&display=swap"
         rel="stylesheet">
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="/tailwindcss.cdn.js"></script>
     <script>
         tailwind.config = {
             theme: {
@@ -104,8 +104,8 @@
                     </svg>
                 </div>
                 <div>
-                    <h1 class="text-2xl font-heading font-bold text-white">UDID 管理系统</h1>
-                    <p class="text-white/70 text-sm">医疗器械唯一标识数据平台</p>
+                    <h1 class="text-2xl font-heading font-bold text-white">高新医疗科技有限公司</h1>
+                    <p class="text-white/70 text-sm">医疗器械智能查询与管理平台</p>
                 </div>
             </div>
 
@@ -179,8 +179,8 @@
                     </svg>
                 </div>
                 <div>
-                    <h1 class="text-xl font-heading font-bold text-text">UDID 管理系统</h1>
-                    <p class="text-text-muted text-xs">医疗器械唯一标识数据平台</p>
+                    <h1 class="text-xl font-heading font-bold text-text">高新医疗科技有限公司</h1>
+                    <p class="text-text-muted text-xs">医疗器械智能查询与管理平台</p>
                 </div>
             </div>
 
@@ -284,7 +284,7 @@
 
             <!-- Footer -->
             <p class="text-center text-xs text-text-light mt-6">
-                UDID 医疗器械唯一标识管理系统 &copy; 2024
+                高新医疗科技有限公司 &copy; 2024
             </p>
         </div>
     </div>
@@ -375,12 +375,7 @@
             }
         }
 
-        // Enter key support
-        document.getElementById('password').addEventListener('keyup', (e) => {
-            if (e.key === 'Enter') {
-                document.getElementById('btnLogin').click();
-            }
-        });
+        // 使用 form onsubmit 作为唯一提交入口，避免 Enter 触发重复请求
     </script>
 </body>
 

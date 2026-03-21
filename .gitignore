@@ -22,3 +22,9 @@ ENV/
 # OS
 .DS_Store
 Thumbs.db
+
+# Configuration files with secrets
+.env
+config.json
+*.key
+*.pem

@@ -1,0 +1,57 @@
+-- ============================================
+-- pgloader 迁移配置文件
+-- SQLite → PostgreSQL
+-- ============================================
+
+LOAD DATABASE
+    FROM sqlite:///Users/zhaozengqing/github/AI/test/高新医疗/udid_hybrid_lake.db
+    INTO postgresql://udid_user@localhost:5432/udid_db
+
+WITH
+    -- 基础选项
+    create tables,          -- 创建表结构
+    create indexes,         -- 创建索引
+    reset sequences,        -- 重置序列
+
+    -- 性能选项
+    workers = 8,            -- 并行工作线程
+    concurrency = 2,        -- 并发数
+    batch rows = 10000,     -- 每批行数
+    batch size = 100 MB     -- 每批大小
+
+SET
+    -- PostgreSQL 会话参数
+    work_mem = '200MB',
+    maintenance_work_mem = '512MB'
+
+CAST
+    -- 类型转换规则
+
+    -- 1. 日期时间转换
+    column products.publish_date to date drop not null using zero-dates-to-null,
+    column products.last_updated to timestamptz using sqlite-timestamp-to-timestamp,
+
+    -- 2. FTS 虚拟表不迁移（PostgreSQL 使用 tsvector 替代）
+    table products_fts to drop,
+
+    -- 3. embeddings 表：只迁移元数据，不迁移 BLOB 向量数据
+    -- 向量数据保留在 FAISS 文件中
+    column embeddings.embedding to drop,
+
+    -- 4. 布尔值转换
+    column users.is_active to boolean using sqlite-boolean-to-boolean,
+
+    -- 5. 整数类型
+    column users.id to serial drop typemod
+
+BEFORE LOAD DO
+    -- 非破坏模式：默认不执行 drop/truncate
+    $$ SELECT 'non-destructive migration mode'; $$
+
+AFTER LOAD DO
+    -- 更新统计信息
+    $$ ANALYZE products; $$,
+    $$ ANALYZE embeddings; $$,
+    $$ ANALYZE users; $$,
+    $$ VACUUM ANALYZE; $$
+;

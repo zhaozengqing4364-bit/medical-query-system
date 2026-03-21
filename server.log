@@ -1,0 +1,43 @@
+ * Tip: There are .env files present. Install python-dotenv to use them.
+[Auth] 提示: 请设置 SECRET_KEY 或 config.json 中的 secret_key
+==================================================
+UDID 医疗器械查询系统 - 后端服务
+==================================================
+数据库路径: /Users/zhaozengqing/github/AI/test/高新医疗/udid_hybrid_lake.db
+配置文件路径: /Users/zhaozengqing/github/AI/test/高新医疗/config.json
+API 端点:
+  GET  /api/stats    - 数据库统计
+  GET  /api/search   - 搜索产品
+  POST /api/upload   - 上传 XML
+  POST /api/sync     - 同步数据
+  POST /api/ai-match - AI 匹配
+  GET/POST /api/config - 配置管理
+==================================================
+访问地址: http://localhost:8080
+==================================================
+ * Serving Flask app 'udid_server'
+ * Debug mode: off
+[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8080
+ * Running on http://192.168.0.16:8080
+[33mPress CTRL+C to quit[0m
+127.0.0.1 - - [02/Feb/2026 00:18:39] "GET /api/stats HTTP/1.1" 200 -
+127.0.0.1 - - [02/Feb/2026 00:19:22] "GET /api/search?q=æ­¢è¡\x80æµ·ç»µ&limit=5 HTTP/1.1" 200 -
+127.0.0.1 - - [02/Feb/2026 00:19:22] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [02/Feb/2026 00:19:28] "GET /api/auth/me HTTP/1.1" 200 -
+127.0.0.1 - - [02/Feb/2026 00:19:28] "GET /api/stats HTTP/1.1" 200 -
+127.0.0.1 - - [02/Feb/2026 00:19:28] "GET /api/config HTTP/1.1" 200 -
+127.0.0.1 - - [02/Feb/2026 00:19:28] "GET /api/search?page_size=50 HTTP/1.1" 200 -
+127.0.0.1 - - [02/Feb/2026 00:19:28] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+127.0.0.1 - - [02/Feb/2026 00:19:40] "[35m[1mPOST /api/parse-bid HTTP/1.1[0m" 500 -
+127.0.0.1 - - [02/Feb/2026 00:19:45] "[33mGET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1[0m" 404 -
+127.0.0.1 - - [02/Feb/2026 00:19:47] "[35m[1mPOST /api/parse-bid HTTP/1.1[0m" 500 -
+127.0.0.1 - - [02/Feb/2026 00:19:53] "[35m[1mPOST /api/parse-bid HTTP/1.1[0m" 500 -
+127.0.0.1 - - [02/Feb/2026 00:20:36] "[35m[1mPOST /api/parse-bid HTTP/1.1[0m" 500 -
+127.0.0.1 - - [02/Feb/2026 00:24:07] "[35m[1mPOST /api/parse-bid HTTP/1.1[0m" 500 -
+127.0.0.1 - - [02/Feb/2026 00:24:11] "[33mGET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1[0m" 404 -
+127.0.0.1 - - [02/Feb/2026 00:24:13] "[35m[1mPOST /api/parse-bid HTTP/1.1[0m" 500 -
+127.0.0.1 - - [02/Feb/2026 00:24:49] "GET /api/search?keyword=&status=&type=&category_code=&manufacturer=&cert_no=&model=&commercial_name=&date_from=&date_to=&page=1&page_size=50 HTTP/1.1" 200 -
+127.0.0.1 - - [02/Feb/2026 00:24:52] "[35m[1mPOST /api/parse-bid HTTP/1.1[0m" 500 -
+127.0.0.1 - - [02/Feb/2026 00:25:02] "[35m[1mPOST /api/parse-bid HTTP/1.1[0m" 500 -

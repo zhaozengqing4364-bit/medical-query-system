@@ -16,23 +16,57 @@ UDID 医疗器械查询系统 - Flask 后端服务
 
 import os
 import json
+import sqlite3
 import tempfile
 import time
+import hmac
+import secrets
+import threading
 from typing import Optional, Dict
 from datetime import datetime
-from flask import Flask, request, jsonify, send_from_directory, session, redirect
+import requests
+from flask import Flask, request, jsonify, send_from_directory, session, redirect, g
 from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
 
 # 导入本地数据湖模块
 from udid_hybrid_system import LocalDataLake
+from db_backend import is_postgres_backend
 
 # ==========================================
 # Flask 应用初始化
 # ==========================================, 
 
+def _to_bool(value: str, default: bool = False) -> bool:
+    if value is None:
+        return default
+    return str(value).strip().lower() in ('1', 'true', 'yes', 'on')
+
+
+def _parse_allowed_origins() -> list:
+    raw = os.getenv(
+        'CORS_ALLOWED_ORIGINS',
+        'http://localhost:5000,http://127.0.0.1:5000,http://localhost:8080,http://127.0.0.1:8080'
+    )
+    origins = [item.strip() for item in raw.split(',') if item.strip()]
+    if not origins:
+        raise RuntimeError("CORS_ALLOWED_ORIGINS 不能为空")
+    return origins
+
+
 app = Flask(__name__, static_folder='.', static_url_path='')
-CORS(app, supports_credentials=True)  # 允许跨域请求
+CORS(
+    app,
+    supports_credentials=True,
+    resources={r"/api/*": {"origins": _parse_allowed_origins()}}
+)
+
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = os.getenv('SESSION_COOKIE_SAMESITE', 'Lax')
+app.config['SESSION_COOKIE_SECURE'] = _to_bool(
+    os.getenv('SESSION_COOKIE_SECURE'),
+    default=os.getenv('FLASK_ENV', '').strip().lower() == 'production'
+)
 
 # 初始化数据湖
 DB_PATH = os.path.join(os.path.dirname(__file__), 'udid_hybrid_lake.db')
@@ -49,6 +83,122 @@ ADMIN_API_KEY = os.getenv('ADMIN_API_KEY', '')
 EMBEDDING_RATE_LIMIT_WINDOW = 60
 EMBEDDING_RATE_LIMIT_MAX = 3
 _EMBEDDING_RATE_LIMIT = {}
+LOGIN_RATE_LIMIT_WINDOW = 300
+LOGIN_RATE_LIMIT_MAX_FAILURES = 5
+LOGIN_LOCK_SECONDS = 900
+_LOGIN_ATTEMPTS = {}
+_LOGIN_ATTEMPTS_LOCK = threading.Lock()
+_DB_ACCESS_LOCK = threading.RLock()
+_WEAK_SECRET_VALUES = {
+    '',
+    'change-me',
+    'your_secret_key_here',
+    'your_secret_key_here_change_in_production',
+    'secret',
+    'default',
+}
+
+
+def _is_weak_secret(value: str) -> bool:
+    normalized = (value or '').strip()
+    if len(normalized) < 32:
+        return True
+    lowered = normalized.lower()
+    if lowered in _WEAK_SECRET_VALUES:
+        return True
+    if lowered.startswith('your_') and lowered.endswith('_here'):
+        return True
+    return False
+
+
+def _mask_secret(value: str) -> str:
+    if not value:
+        return ''
+    value = str(value)
+    if len(value) <= 8:
+        return '*' * len(value)
+    return f"{value[:3]}...{value[-4:]}(len={len(value)})"
+
+def _normalize_config_value(key: str, value: str) -> str:
+    if value is None:
+        return ''
+    value = str(value).strip()
+    if not value:
+        return ''
+    if key.endswith('_url'):
+        return value.rstrip('/')
+    return value
+
+def _safe_int(value, default: int, min_value: Optional[int] = None, max_value: Optional[int] = None) -> int:
+    """安全转换整数并做边界裁剪"""
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        number = default
+    if min_value is not None:
+        number = max(min_value, number)
+    if max_value is not None:
+        number = min(max_value, number)
+    return number
+
+def _escape_fts_value(value: str) -> str:
+    """
+    转义 FTS5 查询值，避免引号导致语法错误。
+    仅做最小转义，不改变词义。
+    """
+    if value is None:
+        return ''
+    return str(value).replace('"', '""').strip()
+
+
+def _like_op() -> str:
+    return "ILIKE" if is_postgres_backend() else "LIKE"
+
+
+def _build_keyword_or_clause(alias: str, keywords: list, columns: list, like_op: str) -> tuple:
+    """
+    生成关键词 OR 召回条件，返回 (sql, params)。
+    每个关键词会在多个字段上做模糊匹配，关键词之间 OR。
+    """
+    clauses = []
+    params = []
+    for raw_kw in keywords:
+        kw = (raw_kw or '').strip()
+        if not kw:
+            continue
+        pattern = f"%{kw}%"
+        field_clauses = []
+        for col in columns:
+            field_clauses.append(f"{alias}.{col} {like_op} ?")
+            params.append(pattern)
+        clauses.append(f"({' OR '.join(field_clauses)})")
+    return (" OR ".join(clauses) if clauses else "1=1", params)
+
+
+def _internal_error(log_message: str, error: Exception):
+    print(f"[Server] {log_message}: {error}")
+    return jsonify({"success": False, "error": "服务器内部错误"}), 500
+
+
+@app.before_request
+def _acquire_db_lock_for_request():
+    """
+    SQLite 使用全局共享连接，需请求级串行化避免并发写冲突。
+    PostgreSQL 使用线程隔离连接，不加全局锁以释放并发能力。
+    """
+    if is_postgres_backend():
+        g._db_lock_acquired = False
+        return
+    _DB_ACCESS_LOCK.acquire()
+    g._db_lock_acquired = True
+
+
+@app.teardown_request
+def _release_db_lock_for_request(_exc):
+    if getattr(g, '_db_lock_acquired', False):
+        _DB_ACCESS_LOCK.release()
+    if is_postgres_backend():
+        data_lake.release_thread_connection()
 
 def _load_app_config() -> Dict:
     if os.path.exists(CONFIG_PATH):
@@ -59,14 +209,37 @@ def _load_app_config() -> Dict:
             return {}
     return {}
 
+
+def _ensure_csrf_token() -> str:
+    token = session.get('csrf_token')
+    if token:
+        return token
+    token = secrets.token_urlsafe(32)
+    session['csrf_token'] = token
+    return token
+
+
+def _verify_csrf_token() -> Optional[tuple]:
+    if request.method in ('GET', 'HEAD', 'OPTIONS'):
+        return None
+    # 仅对基于 Session 的请求校验 CSRF；API Key 认证由 _require_admin 分支处理。
+    if not session.get('user_id'):
+        return None
+    expected_token = session.get('csrf_token', '')
+    provided_token = request.headers.get('X-CSRF-Token', '')
+    if not expected_token or not provided_token or not hmac.compare_digest(expected_token, provided_token):
+        return jsonify({"success": False, "error": "CSRF 校验失败"}), 403
+    return None
+
+
 def _ensure_secret_key():
-    if SECRET_KEY:
-        app.secret_key = SECRET_KEY
-        return
     config = _load_app_config()
-    app.secret_key = config.get('secret_key', 'change-me')
-    if app.secret_key == 'change-me':
-        print("[Auth] 提示: 请设置 SECRET_KEY 或 config.json 中的 secret_key")
+    candidate = SECRET_KEY or config.get('secret_key', '')
+    if _is_weak_secret(candidate):
+        raise RuntimeError(
+            "SECRET_KEY 未设置或过弱。请使用 >=32 位随机强密钥（例如: openssl rand -hex 32）。"
+        )
+    app.secret_key = candidate
 
 def _init_auth_tables():
     cursor = data_lake.conn.cursor()
@@ -76,7 +249,7 @@ def _init_auth_tables():
             username TEXT UNIQUE NOT NULL,
             password_hash TEXT NOT NULL,
             role TEXT NOT NULL DEFAULT 'admin',
-            is_active INTEGER DEFAULT 1,
+            is_active BOOLEAN DEFAULT TRUE,
             created_at TEXT,
             updated_at TEXT,
             last_login TEXT
@@ -105,22 +278,84 @@ def _ensure_default_admin():
     cursor = data_lake.conn.cursor()
     cursor.execute('SELECT COUNT(*) FROM users')
     if cursor.fetchone()[0] == 0:
-        default_password = os.getenv('ADMIN_DEFAULT_PASSWORD', 'admin123')
+        default_password = (os.getenv('ADMIN_DEFAULT_PASSWORD') or '').strip()
+        if not default_password:
+            raise RuntimeError(
+                "首次启动必须提供 ADMIN_DEFAULT_PASSWORD。"
+            )
         now = datetime.now().isoformat()
-        cursor.execute('''
-            INSERT INTO users (username, password_hash, role, is_active, created_at, updated_at)
-            VALUES (?, ?, 'admin', 1, ?, ?)
-        ''', ('admin', generate_password_hash(default_password), now, now))
-        data_lake.conn.commit()
-        print("[Auth] 已创建默认管理员 admin")
+        try:
+            cursor.execute('''
+                INSERT INTO users (username, password_hash, role, is_active, created_at, updated_at)
+            VALUES (?, ?, 'admin', ?, ?, ?)
+            ''', ('admin', generate_password_hash(default_password), True, now, now))
+            data_lake.conn.commit()
+            print("[Auth] 已创建默认管理员 admin")
+        except sqlite3.IntegrityError:
+            # 并发情况下可能其他 worker 已创建
+            data_lake.conn.rollback()
+        except Exception as e:
+            data_lake.conn.rollback()
+            raise RuntimeError(f"创建默认管理员失败: {e}")
 
 def _log_auth_action(user_id: Optional[int], action: str):
     cursor = data_lake.conn.cursor()
     cursor.execute('''
         INSERT INTO auth_audit (user_id, action, ip, created_at)
         VALUES (?, ?, ?, ?)
-    ''', (user_id, action, request.remote_addr, datetime.now().isoformat()))
+    ''', (user_id, action, _get_client_ip(), datetime.now().isoformat()))
     data_lake.conn.commit()
+
+
+def _get_client_ip() -> str:
+    forwarded = (request.headers.get('X-Forwarded-For') or '').split(',')[0].strip()
+    return forwarded or request.remote_addr or 'unknown'
+
+
+def _login_attempt_key(username: str) -> str:
+    return f"{(username or '').strip().lower()}|{_get_client_ip()}"
+
+
+def _is_login_rate_limited(username: str) -> int:
+    key = _login_attempt_key(username)
+    now = time.time()
+    with _LOGIN_ATTEMPTS_LOCK:
+        entry = _LOGIN_ATTEMPTS.get(key)
+        if not entry:
+            return 0
+        failures = [ts for ts in entry.get('failures', []) if now - ts <= LOGIN_RATE_LIMIT_WINDOW]
+        entry['failures'] = failures
+        locked_until = float(entry.get('locked_until', 0))
+        if locked_until > now:
+            _LOGIN_ATTEMPTS[key] = entry
+            return int(locked_until - now) + 1
+        if failures:
+            _LOGIN_ATTEMPTS[key] = entry
+        else:
+            _LOGIN_ATTEMPTS.pop(key, None)
+        return 0
+
+
+def _record_login_failure(username: str):
+    key = _login_attempt_key(username)
+    now = time.time()
+    with _LOGIN_ATTEMPTS_LOCK:
+        entry = _LOGIN_ATTEMPTS.get(key, {})
+        failures = [ts for ts in entry.get('failures', []) if now - ts <= LOGIN_RATE_LIMIT_WINDOW]
+        failures.append(now)
+        locked_until = float(entry.get('locked_until', 0))
+        if len(failures) >= LOGIN_RATE_LIMIT_MAX_FAILURES:
+            locked_until = max(locked_until, now + LOGIN_LOCK_SECONDS)
+        _LOGIN_ATTEMPTS[key] = {
+            'failures': failures,
+            'locked_until': locked_until
+        }
+
+
+def _clear_login_failures(username: str):
+    key = _login_attempt_key(username)
+    with _LOGIN_ATTEMPTS_LOCK:
+        _LOGIN_ATTEMPTS.pop(key, None)
 
 def _get_current_user() -> Optional[Dict]:
     user_id = session.get('user_id')
@@ -154,17 +389,23 @@ def _require_login() -> Optional[tuple]:
     user = _get_current_user()
     if not user or not user.get('is_active'):
         return jsonify({"success": False, "error": "未登录"}), 401
+    csrf_error = _verify_csrf_token()
+    if csrf_error:
+        return csrf_error
     return None
 
 def _require_admin() -> Optional[tuple]:
     user = _get_current_user()
     if user and user.get('is_active') and user.get('role') == 'admin':
+        csrf_error = _verify_csrf_token()
+        if csrf_error:
+            return csrf_error
         return None
 
     api_key = ADMIN_API_KEY or _get_admin_key_from_config()
     if api_key:
         request_key = request.headers.get('X-Admin-Key', '')
-        if request_key == api_key:
+        if request_key and hmac.compare_digest(request_key, api_key):
             return None
 
     return jsonify({"success": False, "error": "无权限访问"}), 403
@@ -179,6 +420,24 @@ def _check_embedding_rate_limit() -> Optional[tuple]:
     records.append(now)
     _EMBEDDING_RATE_LIMIT[ip] = records
     return None
+
+
+@app.after_request
+def _set_security_headers(resp):
+    resp.headers.setdefault('X-Content-Type-Options', 'nosniff')
+    resp.headers.setdefault('X-Frame-Options', 'DENY')
+    resp.headers.setdefault('Referrer-Policy', 'strict-origin-when-cross-origin')
+    resp.headers.setdefault(
+        'Content-Security-Policy',
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline'; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "font-src 'self' https://fonts.gstatic.com data:; "
+        "img-src 'self' data: https:; "
+        "connect-src 'self'; "
+        "object-src 'none'; frame-ancestors 'none'; base-uri 'self'"
+    )
+    return resp
 
 # 初始化认证配置
 _ensure_secret_key()
@@ -244,15 +503,23 @@ def auth_me():
     user = _get_current_user()
     if not user:
         return jsonify({"success": False, "error": "未登录"}), 401
-    return jsonify({"success": True, "data": user})
+    token = _ensure_csrf_token()
+    return jsonify({"success": True, "data": {**user, "csrf_token": token}})
 
 @app.route('/api/auth/login', methods=['POST'])
 def auth_login():
-    body = request.get_json() or {}
+    body = request.get_json(silent=True) or {}
     username = body.get('username', '').strip()
     password = body.get('password', '')
     if not username or not password:
         return jsonify({"success": False, "error": "请输入账号和密码"}), 400
+
+    retry_after = _is_login_rate_limited(username)
+    if retry_after > 0:
+        resp = jsonify({"success": False, "error": "登录失败次数过多，请稍后再试"})
+        resp.status_code = 429
+        resp.headers['Retry-After'] = str(retry_after)
+        return resp
 
     cursor = data_lake.conn.cursor()
     cursor.execute('''
@@ -262,22 +529,36 @@ def auth_login():
     row = cursor.fetchone()
     if not row:
         _log_auth_action(None, f"login_failed:{username}")
+        _record_login_failure(username)
         return jsonify({"success": False, "error": "账号或密码错误"}), 401
 
     user_id, password_hash, role, is_active = row
     if not is_active or not check_password_hash(password_hash, password):
         _log_auth_action(user_id, "login_failed")
+        _record_login_failure(username)
         return jsonify({"success": False, "error": "账号或密码错误"}), 401
 
+    _clear_login_failures(username)
     session['user_id'] = user_id
     session['role'] = role
+    session['csrf_token'] = secrets.token_urlsafe(32)
     cursor.execute('UPDATE users SET last_login = ? WHERE id = ?', (datetime.now().isoformat(), user_id))
     data_lake.conn.commit()
     _log_auth_action(user_id, "login")
-    return jsonify({"success": True, "data": {"username": username, "role": role}})
+    return jsonify({
+        "success": True,
+        "data": {
+            "username": username,
+            "role": role,
+            "csrf_token": session['csrf_token']
+        }
+    })
 
 @app.route('/api/auth/logout', methods=['POST'])
 def auth_logout():
+    auth_error = _require_login()
+    if auth_error:
+        return auth_error
     user = _get_current_user()
     session.clear()
     if user:
@@ -331,13 +612,14 @@ def create_user():
     try:
         cursor.execute('''
             INSERT INTO users (username, password_hash, role, is_active, created_at, updated_at)
-            VALUES (?, ?, ?, 1, ?, ?)
-        ''', (username, generate_password_hash(password), role, now, now))
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (username, generate_password_hash(password), role, True, now, now))
         data_lake.conn.commit()
         _log_auth_action(session.get('user_id'), f"create_user:{username}")
         return jsonify({"success": True})
     except Exception as e:
-        return jsonify({"success": False, "error": f"创建失败: {e}"}), 500
+        print(f"[Auth] 创建用户失败: {e}")
+        return jsonify({"success": False, "error": "创建失败"}), 500
 
 @app.route('/api/admin/users/<int:user_id>', methods=['PATCH'])
 def update_user(user_id: int):
@@ -354,7 +636,7 @@ def update_user(user_id: int):
         params.append(body['role'])
     if 'is_active' in body:
         fields.append('is_active = ?')
-        params.append(1 if body['is_active'] else 0)
+        params.append(_to_bool(body.get('is_active'), default=False))
     if 'password' in body and body['password']:
         fields.append('password_hash = ?')
         params.append(generate_password_hash(body['password']))
@@ -459,7 +741,7 @@ def get_stats():
             }
         })
     except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
+        return _internal_error("接口处理失败", e)
 
 # ==========================================
 # API: 搜索
@@ -488,29 +770,38 @@ def search():
             "page_size": int
         }
     """
+    auth_error = _require_login()
+    if auth_error:
+        return auth_error
     try:
-        # 获取参数
-        keyword = request.args.get('keyword', '')
-        status = request.args.get('status', '')
-        product_type = request.args.get('type', '')
-        category_code = request.args.get('category_code', '')
-        manufacturer = request.args.get('manufacturer', '')
+        # 获取参数（兼容 keyword/q、page_size/limit）
+        keyword = (request.args.get('keyword') or request.args.get('q') or '').strip()
+        status = (request.args.get('status') or '').strip()
+        product_type = (request.args.get('type') or '').strip()
+        category_code = (request.args.get('category_code') or '').strip()
+        manufacturer = (request.args.get('manufacturer') or '').strip()
         # 新增筛选参数
-        cert_no = request.args.get('cert_no', '')  # 注册证号
-        model = request.args.get('model', '')  # 规格型号
-        commercial_name = request.args.get('commercial_name', '')  # 商品名称
-        date_from = request.args.get('date_from', '')  # 发布日期起
-        date_to = request.args.get('date_to', '')  # 发布日期止
-        
-        page = int(request.args.get('page', 1))
-        page_size = int(request.args.get('page_size', 50))
+        cert_no = (request.args.get('cert_no') or '').strip()  # 注册证号
+        model = (request.args.get('model') or '').strip()  # 规格型号
+        commercial_name = (request.args.get('commercial_name') or '').strip()  # 商品名称
+        date_from = (request.args.get('date_from') or '').strip()  # 发布日期起
+        date_to = (request.args.get('date_to') or '').strip()  # 发布日期止
+
+        page = _safe_int(request.args.get('page', 1), 1, min_value=1)
+        page_size_arg = request.args.get('page_size')
+        if page_size_arg is None:
+            page_size_arg = request.args.get('limit', 50)
+        page_size = _safe_int(page_size_arg, 50, min_value=1, max_value=200)
         
         # 构建查询
+        like_op = _like_op()
         cursor = data_lake.conn.cursor()
-        
-        # 检查是否有 FTS5 索引
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='products_fts'")
-        has_fts = cursor.fetchone() is not None
+
+        # PostgreSQL 走统一 ILIKE 分支；SQLite 保留 FTS5 快速路径用于回滚。
+        has_fts = False
+        if not is_postgres_backend():
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='products_fts'")
+            has_fts = cursor.fetchone() is not None
         
         if has_fts and (keyword or cert_no or model or commercial_name or manufacturer):
             # 智能加速模式：只要有文本查询条件，就使用 FTS5
@@ -518,19 +809,31 @@ def search():
             
             # 1. 关键词（全字段匹配）
             if keyword:
-                fts_parts.append(f'"{keyword}"')
+                safe_keyword = _escape_fts_value(keyword)
+                if safe_keyword:
+                    fts_parts.append(f'"{safe_keyword}"')
             
             # 2. 特定字段匹配 (FTS 语法: column: query)
             if cert_no:
-                fts_parts.append(f'cert_no: "{cert_no}"')
+                safe_cert_no = _escape_fts_value(cert_no)
+                if safe_cert_no:
+                    fts_parts.append(f'cert_no: "{safe_cert_no}"')
             if model:
-                fts_parts.append(f'model: "{model}"')
+                safe_model = _escape_fts_value(model)
+                if safe_model:
+                    fts_parts.append(f'model: "{safe_model}"')
             if commercial_name:
-                fts_parts.append(f'commercial_name: "{commercial_name}"')
+                safe_commercial_name = _escape_fts_value(commercial_name)
+                if safe_commercial_name:
+                    fts_parts.append(f'commercial_name: "{safe_commercial_name}"')
             if manufacturer:
-                fts_parts.append(f'manufacturer: "{manufacturer}"')
+                safe_manufacturer = _escape_fts_value(manufacturer)
+                if safe_manufacturer:
+                    fts_parts.append(f'manufacturer: "{safe_manufacturer}"')
                 
             # 构建 FTS 查询字符串 (AND 关系)
+            if not fts_parts:
+                return jsonify({"success": False, "error": "无效的检索条件"}), 400
             fts_query = " AND ".join(fts_parts)
             
             # 3. 结构化筛选条件 (SQL Filter)
@@ -570,26 +873,44 @@ def search():
                 cursor.execute(count_sql, [fts_query] + params)
             total = cursor.fetchone()[0]
             
-            # 分页查询
+            # 分页查询（性能优化：先按 FTS rank 限定候选池，再按更新时间排序）
             offset = (page - 1) * page_size
+            # 不再固定 5000 上限，避免深分页被截断导致“有 total 但翻页为空”
+            fts_scan_limit = max(1000, offset + page_size * 20)
+
             query_sql = f"""
+                WITH ranked_hits AS (
+                    SELECT rowid, rank
+                    FROM products_fts
+                    WHERE products_fts MATCH ?
+                    ORDER BY rank
+                    LIMIT ?
+                )
                 SELECT p.di_code, p.product_name, p.commercial_name, p.model, p.manufacturer, 
                        p.description, p.publish_date, p.source, p.last_updated, p.category_code
-                FROM products p
-                INNER JOIN products_fts ON p.rowid = products_fts.rowid
-                WHERE products_fts MATCH ? AND {where_sql}
+                FROM ranked_hits h
+                INNER JOIN products p ON p.rowid = h.rowid
+                WHERE {where_sql}
                 ORDER BY p.last_updated DESC
                 LIMIT ? OFFSET ?
             """
-            cursor.execute(query_sql, [fts_query] + params + [page_size, offset])
+            cursor.execute(query_sql, [fts_query, fts_scan_limit] + params + [page_size, offset])
             rows = cursor.fetchall()
+
+            # 如果候选窗口过小导致分页不足，自动放大窗口重试一次
+            if len(rows) < page_size and total > (offset + len(rows)):
+                larger_scan_limit = max(fts_scan_limit * 2, offset + page_size * 40)
+                cursor.execute(query_sql, [fts_query, larger_scan_limit] + params + [page_size, offset])
+                rows = cursor.fetchall()
         else:
             # 普通 LIKE 搜索（无关键词或无 FTS）
             conditions = []
             params = []
             
             if keyword:
-                conditions.append("(product_name LIKE ? OR manufacturer LIKE ? OR model LIKE ? OR description LIKE ?)")
+                conditions.append(
+                    f"(product_name {like_op} ? OR manufacturer {like_op} ? OR model {like_op} ? OR description {like_op} ?)"
+                )
                 keyword_pattern = f"%{keyword}%"
                 params.extend([keyword_pattern] * 4)
             
@@ -602,24 +923,24 @@ def search():
                 params.append(product_type)
                 
             if category_code:
-                conditions.append("category_code LIKE ?")
+                conditions.append(f"category_code {like_op} ?")
                 params.append(f"{category_code}%")
                 
             if manufacturer:
-                conditions.append("manufacturer LIKE ?")
+                conditions.append(f"manufacturer {like_op} ?")
                 params.append(f"%{manufacturer}%")
             
             # 新增筛选条件
             if cert_no:
-                conditions.append("cert_no LIKE ?")
+                conditions.append(f"cert_no {like_op} ?")
                 params.append(f"%{cert_no}%")
             
             if model:
-                conditions.append("model LIKE ?")
+                conditions.append(f"model {like_op} ?")
                 params.append(f"%{model}%")
             
             if commercial_name:
-                conditions.append("commercial_name LIKE ?")
+                conditions.append(f"commercial_name {like_op} ?")
                 params.append(f"%{commercial_name}%")
             
             if date_from:
@@ -674,7 +995,7 @@ def search():
         })
         
     except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
+        return _internal_error("接口处理失败", e)
 
 # ==========================================
 # API: 上传 XML
@@ -692,6 +1013,8 @@ def upload_xml():
     if auth_error:
         return auth_error
     try:
+        if 'file' not in request.files:
+            return jsonify({"success": False, "error": "缺少文件字段 file"}), 400
         # 获取上传的文件
         file = request.files['file']
         if file.filename == '':
@@ -707,18 +1030,29 @@ def upload_xml():
         
         try:
             # 导入数据
-            count = data_lake.ingest_xml(tmp_path)
-            return jsonify({
-                "success": True,
-                "message": f"成功导入 {count} 条记录",
-                "count": count
-            })
+            result = data_lake.ingest_xml(tmp_path)
+            # ingest_xml 返回 dict，提取统计信息
+            if isinstance(result, dict):
+                count = result.get('total', 0)
+                return jsonify({
+                    "success": True,
+                    "message": f"成功导入 {count} 条记录（新增: {result.get('inserted', 0)}, 变更: {result.get('updated', 0)}, 跳过: {result.get('skipped', 0)}）",
+                    "count": count,
+                    "details": result
+                })
+            else:
+                count = result if isinstance(result, int) else 0
+                return jsonify({
+                    "success": True,
+                    "message": f"成功导入 {count} 条记录",
+                    "count": count
+                })
         finally:
             # 清理临时文件
             os.unlink(tmp_path)
             
     except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
+        return _internal_error("接口处理失败", e)
 
 # ==========================================
 # API: 手动同步
@@ -760,7 +1094,80 @@ def sync_data():
             "error": "同步模块尚未实现，请使用手动上传功能"
         }), 501
     except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
+        return _internal_error("接口处理失败", e)
+
+
+SYNC_SERVER_BASE = os.getenv('SYNC_SERVER_BASE', 'http://127.0.0.1:8888').rstrip('/')
+
+
+def _proxy_to_sync_server(path: str, method: str = 'GET'):
+    """
+    代理同步监控接口到独立 sync_server，保证前端 `/api/sync/*` 契约一致。
+    """
+    url = f"{SYNC_SERVER_BASE}{path}"
+    headers = {}
+    for key in ('X-API-Key', 'X-Timestamp', 'Content-Type'):
+        value = request.headers.get(key)
+        if value:
+            headers[key] = value
+    try:
+        if method == 'POST':
+            payload = request.get_json(silent=True)
+            response = requests.post(url, headers=headers, json=payload, timeout=30)
+        else:
+            response = requests.get(url, headers=headers, timeout=30)
+        try:
+            data = response.json()
+        except Exception:
+            data = {"success": False, "error": f"sync_server 响应非 JSON: {response.text[:200]}"}
+        return jsonify(data), response.status_code
+    except requests.RequestException as e:
+        return jsonify({"success": False, "error": f"sync_server 不可用: {e}"}), 502
+
+
+@app.route('/api/sync/start', methods=['POST'])
+def sync_start_proxy():
+    return _proxy_to_sync_server('/api/sync/start', method='POST')
+
+
+@app.route('/api/sync/stop', methods=['POST'])
+def sync_stop_proxy():
+    return _proxy_to_sync_server('/api/sync/stop', method='POST')
+
+
+@app.route('/api/sync/progress', methods=['GET'])
+def sync_progress_proxy():
+    return _proxy_to_sync_server('/api/sync/progress', method='GET')
+
+
+@app.route('/api/sync/history', methods=['GET'])
+def sync_history_proxy():
+    return _proxy_to_sync_server('/api/sync/history', method='GET')
+
+
+@app.route('/api/sync/status', methods=['GET'])
+def sync_status_proxy():
+    return _proxy_to_sync_server('/api/sync/status', method='GET')
+
+
+@app.route('/api/sync/logs', methods=['GET'])
+def sync_logs_proxy():
+    return _proxy_to_sync_server('/api/sync/logs', method='GET')
+
+
+@app.route('/api/sync/full', methods=['POST'])
+def sync_full_proxy():
+    return _proxy_to_sync_server('/api/sync/full', method='POST')
+
+
+@app.route('/api/sync/data', methods=['POST'])
+def sync_data_proxy():
+    return _proxy_to_sync_server('/api/sync/data', method='POST')
+
+
+@app.route('/api/sync/vectors', methods=['POST'])
+def sync_vectors_proxy():
+    return _proxy_to_sync_server('/api/sync/vectors', method='POST')
 
 # ==========================================
 # API: 纯算法智能匹配 (No-AI)
@@ -792,13 +1199,18 @@ def algo_match():
     """
     纯算法智能匹配 (Jieba分词 + BM25)
     """
+    auth_error = _require_login()
+    if auth_error:
+        return auth_error
     try:
         import jieba.analyse
     except ImportError:
         return jsonify({"success": False, "error": "请先安装 jieba 库: pip install jieba"}), 501
 
     try:
-        body = request.get_json()
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            return jsonify({"success": False, "error": "请求体必须为 JSON 对象"}), 400
         requirement = body.get('requirement', '')
         filters = body.get('filters', {})
         mode = body.get('mode', 'simple') # 'simple'(极速算法) 或 'semantic'(AI语义)
@@ -832,6 +1244,7 @@ def algo_match():
         fts_query = " OR ".join([f'"{k}"' for k in keywords])
         
         # 3. 构建过滤条件
+        like_op = _like_op()
         params = []
         sql_conditions = []
         
@@ -840,7 +1253,9 @@ def algo_match():
         if keyword_filter:
             # 关键词过滤（来自搜索框），作为硬性约束 (LIKE)
             # 确保结果集与普通搜索一致
-            sql_conditions.append("(p.product_name LIKE ? OR p.manufacturer LIKE ? OR p.model LIKE ? OR p.description LIKE ?)")
+            sql_conditions.append(
+                f"(p.product_name {like_op} ? OR p.manufacturer {like_op} ? OR p.model {like_op} ? OR p.description {like_op} ?)"
+            )
             pattern = f"%{keyword_filter}%"
             params.extend([pattern, pattern, pattern, pattern])
         
@@ -862,19 +1277,19 @@ def algo_match():
             sql_conditions.append("p.product_type = ?")
             params.append(product_type)
         if category_code:
-            sql_conditions.append("p.category_code LIKE ?")
+            sql_conditions.append(f"p.category_code {like_op} ?")
             params.append(f"{category_code}%")
         if manufacturer:
-            sql_conditions.append("p.manufacturer LIKE ?")
+            sql_conditions.append(f"p.manufacturer {like_op} ?")
             params.append(f"%{manufacturer}%")
         if cert_no:
-            sql_conditions.append("p.cert_no LIKE ?")
+            sql_conditions.append(f"p.cert_no {like_op} ?")
             params.append(f"%{cert_no}%")
         if model:
-            sql_conditions.append("p.model LIKE ?")
+            sql_conditions.append(f"p.model {like_op} ?")
             params.append(f"%{model}%")
         if commercial_name:
-            sql_conditions.append("p.commercial_name LIKE ?")
+            sql_conditions.append(f"p.commercial_name {like_op} ?")
             params.append(f"%{commercial_name}%")
         if date_from:
             sql_conditions.append("p.publish_date >= ?")
@@ -885,23 +1300,38 @@ def algo_match():
             
         where_sql = " AND ".join(sql_conditions) if sql_conditions else "1=1"
         
-        # 4. 执行 BM25 查询
-        # FTS5 的 rank 值越小越好 (通常是个负数或者基于 BM25 的分数)
-        # 我们使用 ORDER BY rank 来获取最佳匹配
+        # 4. 执行召回查询
         cursor = data_lake.conn.cursor()
-        
-        query_sql = f"""
-            SELECT p.di_code, p.product_name, p.commercial_name, p.model, p.manufacturer, 
-                   p.description, p.publish_date, p.source, p.last_updated, p.category_code
-            FROM products p
-            INNER JOIN products_fts ON p.rowid = products_fts.rowid
-            WHERE products_fts MATCH ? AND {where_sql}
-            ORDER BY products_fts.rank
-            LIMIT 50
-        """
-        
-        cursor.execute(query_sql, [fts_query] + params)
-        rows = cursor.fetchall()
+        if is_postgres_backend():
+            keyword_sql, keyword_params = _build_keyword_or_clause(
+                alias='p',
+                keywords=keywords,
+                columns=['product_name', 'commercial_name', 'model', 'manufacturer', 'description', 'cert_no'],
+                like_op=like_op
+            )
+            query_sql = f"""
+                SELECT p.di_code, p.product_name, p.commercial_name, p.model, p.manufacturer,
+                       p.description, p.publish_date, p.source, p.last_updated, p.category_code
+                FROM products p
+                WHERE ({keyword_sql}) AND {where_sql}
+                ORDER BY p.last_updated DESC
+                LIMIT 50
+            """
+            cursor.execute(query_sql, keyword_params + params)
+            rows = cursor.fetchall()
+        else:
+            # SQLite: 保留 FTS5 BM25 快速路径
+            query_sql = f"""
+                SELECT p.di_code, p.product_name, p.commercial_name, p.model, p.manufacturer, 
+                       p.description, p.publish_date, p.source, p.last_updated, p.category_code
+                FROM products p
+                INNER JOIN products_fts ON p.rowid = products_fts.rowid
+                WHERE products_fts MATCH ? AND {where_sql}
+                ORDER BY products_fts.rank
+                LIMIT 50
+            """
+            cursor.execute(query_sql, [fts_query] + params)
+            rows = cursor.fetchall()
         
         # 5. 零结果回退机制 (Fallback)
         # 如果由 Requirement + Filter 组合查询没有结果，但 Filter 本身有结果
@@ -960,7 +1390,7 @@ def algo_match():
         })
 
     except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
+        return _internal_error("接口处理失败", e)
 
 @app.route('/api/ai-match', methods=['POST'])
 def ai_match():
@@ -980,47 +1410,75 @@ def ai_match():
             "data": [产品列表，带有 matchScore 和 matchReason 字段]
         }
     """
+    auth_error = _require_login()
+    if auth_error:
+        return auth_error
     try:
-        body = request.get_json()
-        requirement = body.get('requirement', '')  # 参数需求
-        product_name = body.get('product_name', '')  # 产品名称（新增）
+        body = request.get_json(silent=True) or {}
+        requirement = (body.get('requirement') or '').strip()  # 参数需求
+        product_name = (body.get('product_name') or '').strip()  # 产品名称
+        specs = (body.get('specs') or '').strip()  # 规格型号
         filters = body.get('filters', {})
-        use_vector = body.get('use_vector', True)
-        
+        if not isinstance(filters, dict):
+            filters = {}
+
+        use_vector = bool(body.get('use_vector', True))
+        page = _safe_int(body.get('page', 1), 1, min_value=1)
+        page_size = _safe_int(body.get('page_size', 50), 50, min_value=1, max_value=1000)
+        min_score = _safe_int(body.get('min_score', 0), 0, min_value=0, max_value=100)
+        recall_k = min(1000, max(50, page * page_size))
+
         # 至少需要产品名称或参数需求
         if not requirement and not product_name:
             return jsonify({"success": False, "error": "请输入产品名称或参数需求"}), 400
-        
+
         # 准备筛选条件
-        keyword = filters.get('keyword', '')
-        category_code = filters.get('category_code', '')
-        manufacturer = filters.get('manufacturer', '')
-        
+        keyword = (filters.get('keyword') or '').strip()
+        status = (filters.get('status') or '').strip()
+        product_type = (filters.get('type') or '').strip()
+        category_code = (filters.get('category_code') or '').strip()
+        manufacturer = (filters.get('manufacturer') or '').strip()
+        cert_no = (filters.get('cert_no') or '').strip()
+        model = (filters.get('model') or '').strip()
+        commercial_name = (filters.get('commercial_name') or '').strip()
+        date_from = (filters.get('date_from') or '').strip()
+        date_to = (filters.get('date_to') or '').strip()
+        like_op = _like_op()
+
         candidates = []
         recall_method = "vector"
-        
+
         # -------------------------------------------------------
         # 两阶段检索：产品名称过滤 + 参数需求排序
         # -------------------------------------------------------
         if use_vector:
             try:
                 from embedding_service import hybrid_search
-                
+
                 vector_filters = {
                     'keyword': keyword,
+                    'status': status,
+                    'type': product_type,
                     'category_code': category_code,
-                    'manufacturer': manufacturer
+                    'manufacturer': manufacturer,
+                    'cert_no': cert_no,
+                    'model': model,
+                    'commercial_name': commercial_name,
+                    'date_from': date_from,
+                    'date_to': date_to,
                 }
-                
-                # 传入产品名称和参数需求
+                vector_filters = {k: v for k, v in vector_filters.items() if v}
+
                 vector_results = hybrid_search(
                     query=requirement,  # 参数需求（用于向量排序）
                     conn=data_lake.conn,
-                    top_k=50,
-                    filters=vector_filters,
-                    product_name=product_name  # 产品名称（用于过滤）
+                    top_k=recall_k,
+                    filters=vector_filters if vector_filters else None,
+                    product_name=product_name,  # 产品名称（用于过滤）
+                    specs=specs,  # 规格型号（用于加权）
+                    min_score=min_score  # 最低匹配分
                 )
-                
+
                 if vector_results:
                     candidates = vector_results
                     print(f"[AiMatch] 两阶段检索召回 {len(candidates)} 个候选")
@@ -1028,69 +1486,112 @@ def ai_match():
                 print("[AiMatch] 向量服务未安装，使用 FTS 召回")
             except Exception as e:
                 print(f"[AiMatch] 向量检索失败: {e}，降级到 FTS")
-        
+
         # -------------------------------------------------------
         # 降级：使用 FTS 关键词检索
         # -------------------------------------------------------
         if not candidates:
-            # 提取关键词
+            query_text = requirement or product_name or keyword
+
+            # 提取关键词（优先本地算法，避免网络抖动影响检索速度）
             keywords = []
-            try:
-                from ai_service import expand_search_keywords
-                keywords = expand_search_keywords(requirement)
-            except Exception as e:
-                print(f"[AiMatch] AI 关键词扩展失败: {e}")
-            
-            if not keywords:
+            if query_text:
                 try:
                     import jieba.analyse
-                    keywords = jieba.analyse.extract_tags(requirement, topK=5)
-                except:
-                    pass
-            
-            if not keywords:
-                return jsonify({"success": False, "error": "无法提取有效关键词"}), 400
-            
-            fts_query = " OR ".join([f'"{k}"' for k in keywords])
-            
-            if keywords:
-                # 使用 FTS5 全文检索按相关性排序
-                where_sql_fts = (
-                    where_clause.replace("product_name", "p.product_name")
-                                .replace("manufacturer", "p.manufacturer")
-                                .replace("model", "p.model")
-                                .replace("description", "p.description")
-                                .replace("category_code", "p.category_code")
-                )
+                    keywords = jieba.analyse.extract_tags(query_text, topK=5)
+                except Exception:
+                    keywords = []
 
+            # 仅在需要时做 AI 扩展（避免每次回退都走远程 API）
+            if query_text and use_vector and len(keywords) < 2:
+                try:
+                    from ai_service import expand_search_keywords
+                    ai_keywords = expand_search_keywords(query_text)
+                    for kw in ai_keywords:
+                        if kw and kw not in keywords:
+                            keywords.append(kw)
+                    keywords = keywords[:8]
+                except Exception as e:
+                    print(f"[AiMatch] AI 关键词扩展失败: {e}")
+
+            if not keywords and query_text:
+                keywords = [query_text[:20]]
+
+            safe_keywords = [_escape_fts_value(k) for k in keywords if _escape_fts_value(k)]
+            if not safe_keywords:
+                return jsonify({"success": False, "error": "无法提取有效关键词"}), 400
+
+            fts_query = " OR ".join([f'"{k}"' for k in safe_keywords])
+
+            sql_conditions = []
+            params = []
+            if keyword:
+                sql_conditions.append(
+                    f"(p.product_name {like_op} ? OR p.manufacturer {like_op} ? OR p.model {like_op} ? OR p.description {like_op} ?)"
+                )
+                keyword_pattern = f"%{keyword}%"
+                params.extend([keyword_pattern] * 4)
+            if status:
+                sql_conditions.append("p.status = ?")
+                params.append(status)
+            if product_type:
+                sql_conditions.append("p.product_type = ?")
+                params.append(product_type)
+            if category_code:
+                sql_conditions.append(f"p.category_code {like_op} ?")
+                params.append(f"{category_code}%")
+            if manufacturer:
+                sql_conditions.append(f"p.manufacturer {like_op} ?")
+                params.append(f"%{manufacturer}%")
+            if cert_no:
+                sql_conditions.append(f"p.cert_no {like_op} ?")
+                params.append(f"%{cert_no}%")
+            if model:
+                sql_conditions.append(f"p.model {like_op} ?")
+                params.append(f"%{model}%")
+            if commercial_name:
+                sql_conditions.append(f"p.commercial_name {like_op} ?")
+                params.append(f"%{commercial_name}%")
+            if date_from:
+                sql_conditions.append("p.publish_date >= ?")
+                params.append(date_from)
+            if date_to:
+                sql_conditions.append("p.publish_date <= ?")
+                params.append(date_to)
+            where_clause = " AND ".join(sql_conditions) if sql_conditions else "1=1"
+            cursor = data_lake.conn.cursor()
+
+            if is_postgres_backend():
+                keyword_sql, keyword_params = _build_keyword_or_clause(
+                    alias='p',
+                    keywords=safe_keywords,
+                    columns=['product_name', 'commercial_name', 'model', 'manufacturer', 'description', 'cert_no', 'scope'],
+                    like_op=like_op
+                )
+                query_sql = f"""
+                    SELECT p.di_code, p.product_name, p.commercial_name, p.model, p.manufacturer,
+                           p.description, p.publish_date, p.source, p.last_updated, p.category_code, p.scope
+                    FROM products p
+                    WHERE ({keyword_sql}) AND {where_clause}
+                    ORDER BY p.last_updated DESC
+                    LIMIT ?
+                """
+                cursor.execute(query_sql, keyword_params + params + [recall_k])
+            else:
                 query_sql = (
                     "SELECT p.di_code, p.product_name, p.commercial_name, p.model, p.manufacturer, "
                     "p.description, p.publish_date, p.source, p.last_updated, p.category_code, p.scope "
                     "FROM products p "
-                    "INNER JOIN products_fts f ON p.rowid = f.rowid "
-                    f"WHERE f.products_fts MATCH ? AND {where_sql_fts} "
-                    "ORDER BY f.rank "
-                    "LIMIT 50"
+                    "INNER JOIN products_fts ON p.rowid = products_fts.rowid "
+                    f"WHERE products_fts MATCH ? AND {where_clause} "
+                    "ORDER BY products_fts.rank "
+                    "LIMIT ?"
                 )
-                params_final = [fts_query] + params
-                
-            else:
-                # 回退到按时间排序
-                query_sql = (
-                    "SELECT di_code, product_name, commercial_name, model, manufacturer, "
-                    "description, publish_date, source, last_updated, category_code, scope "
-                    "FROM products "
-                    f"WHERE {where_clause} "
-                    "ORDER BY last_updated DESC "
-                    "LIMIT 50"
-                )
-                params_final = params
-
-            cursor = data_lake.conn.cursor()
-            cursor.execute(query_sql, params_final)
+                params_final = [fts_query] + params + [recall_k]
+                cursor.execute(query_sql, params_final)
             rows = cursor.fetchall()
-            
-            # 零结果回退
+
+            # 零结果回退：仅按筛选条件返回（保障可用性）
             if not rows and where_clause != "1=1":
                 print("[AiMatch] No FTS match found, falling back to Filter-only candidates.")
                 fallback_sql = f"""
@@ -1099,49 +1600,189 @@ def ai_match():
                     FROM products p
                     WHERE {where_clause}
                     ORDER BY p.last_updated DESC
-                    LIMIT 50
+                    LIMIT ?
                 """
-                cursor.execute(fallback_sql, params)
+                cursor.execute(fallback_sql, params + [recall_k])
                 rows = cursor.fetchall()
-                
+
             columns = ['di_code', 'product_name', 'commercial_name', 'model', 'manufacturer',
                        'description', 'publish_date', 'source', 'last_updated', 'category_code', 'scope']
             candidates = [dict(zip(columns, row)) for row in rows]
             recall_method = "fts"
-            print(f"[AiMatch] FTS 检索召回 {len(candidates)} 个候选")
-        
+            print(f"[AiMatch] FTS/关键词 检索召回 {len(candidates)} 个候选")
+
         if not candidates:
             return jsonify({
-                "success": False, 
+                "success": False,
                 "error": "没有符合筛选条件的候选产品"
             }), 400
-        
-        # 向量检索结果已经包含 matchScore，直接返回
-        if recall_method == "vector":
+
+        # FTS 结果需要补充 matchScore
+        if recall_method != "vector":
+            for i, item in enumerate(candidates):
+                if 'matchScore' not in item:
+                    # 基于排名的分数：第1名=85，第50名=55
+                    item['matchScore'] = max(55, 85 - i)
+
+        # 最低分过滤（向量结果通常已在 hybrid_search 内过滤，这里做兜底）
+        if min_score > 0:
+            candidates = [item for item in candidates if item.get('matchScore', 0) >= min_score]
+
+        if not candidates:
             return jsonify({
-                "success": True,
-                "data": candidates,
-                "total": len(candidates),
-                "method": "vector"
-            })
+                "success": False,
+                "error": f"没有达到最低匹配分数（{min_score}%）的候选产品"
+            }), 400
+
+        filtered_total = len(candidates)
+        offset = (page - 1) * page_size
+        paged_candidates = candidates[offset: offset + page_size]
+
+        return jsonify({
+            "success": True,
+            "data": paged_candidates,
+            "total": filtered_total,
+            "filtered_total": filtered_total,
+            "page": page,
+            "page_size": page_size,
+            "method": recall_method
+        })
+
+    except ImportError:
+        return jsonify({"success": False, "error": "向量服务模块不可用"}), 500
+    except Exception as e:
+        return _internal_error("接口处理失败", e)
+
+# ==========================================
+# API: 招标信息智能解析
+# ==========================================
+
+def _build_ai_error_message(ai_err: dict, default_error: str) -> str:
+    """将 ai_service 的错误快照映射为可读业务错误信息。"""
+    err_type = (ai_err or {}).get('type')
+    status_code = (ai_err or {}).get('status_code')
+    provider = (ai_err or {}).get('provider') or '上游服务'
+
+    if err_type == 'ssl_error':
+        return f"AI 服务 TLS 握手失败（{provider}），请稍后重试或更换可用网关。"
+    if err_type == 'timeout':
+        return f"AI 服务请求超时（{provider}），请稍后重试。"
+    if err_type == 'auth_error' or status_code == 401:
+        return f"AI 鉴权失败（{provider}），请检查 API Key 是否有效。"
+    if err_type == 'rate_limit' or status_code == 429:
+        return f"AI 调用频率受限（{provider}），请稍后重试。"
+    if err_type == 'upstream_unavailable':
+        return f"AI 上游暂不可用（{provider}），请稍后重试。"
+    return default_error
+
+
+@app.route('/api/parse-bid', methods=['POST'])
+def parse_bid():
+    """
+    AI 解析招标信息，提取产品名称、规格型号、参数需求
+    
+    Body: JSON
+        {
+            "bid_text": str - 招标文本描述
+        }
+    
+    Returns:
+        {
+            "success": bool,
+            "data": {
+                "product_name": str,
+                "specs": str,
+                "requirement": str
+            }
+        }
+    """
+    auth_error = _require_login()
+    if auth_error:
+        return auth_error
+    try:
+        body = request.get_json(silent=True) or {}
+        bid_text = (body.get('bid_text', '') or '').strip()
         
-        # FTS 结果需要添加 matchScore
-        for i, item in enumerate(candidates):
-            if 'matchScore' not in item:
-                # 基于排名的分数：第1名=85，第50名=55
-                item['matchScore'] = max(55, 85 - i)
+        if not bid_text:
+            return jsonify({"success": False, "error": "请输入招标信息"}), 400
+        
+        if len(bid_text) > 5000:
+            bid_text = bid_text[:5000]
+        
+        from ai_service import call_ai_api, load_config as load_ai_config, sanitize_user_input, get_last_ai_error
+        
+        config = load_ai_config()
+        if not config.get('api_key'):
+            return jsonify({"success": False, "error": "AI 服务未配置，请先在管理后台设置 API Key"}), 400
+        
+        safe_text = sanitize_user_input(bid_text)
+        
+        prompt = f"""你是医疗器械采购专家。请从以下招标/采购描述中提取结构化信息。
+
+招标描述：
+"{safe_text}"
+
+请严格按照以下 JSON 格式返回（不要 Markdown 标记）：
+{{
+  "product_name": "产品名称（通用名，如：负压引流器、心电监护仪）",
+  "specs": "规格型号（如有，如：双瓶2000ml、12导联）",
+  "requirement": "功能/用途/参数需求（如：用于手术废液及痰液收集）"
+}}
+
+规则：
+1. product_name 必须是标准医疗器械通用名称，去掉品牌和厂家信息
+2. 如果包含多个产品，只提取第一个主要产品
+3. specs 没有明确规格时留空字符串
+4. requirement 提取用途、功能要求、技术参数等"""
+
+        response = call_ai_api(prompt, config)
+        
+        if not response:
+            ai_err = get_last_ai_error()
+            return jsonify({
+                "success": False,
+                "error": _build_ai_error_message(ai_err, "AI 调用失败，请检查 API Key / 模型配置后重试")
+            }), 502
+        
+        # 解析 AI 返回的 JSON
+        import json as json_module
+        import re
+        
+        # 清理可能的 markdown 标记
+        clean_text = response.replace('```json', '').replace('```', '').strip()
+        
+        # 尝试提取 JSON 对象
+        json_match = re.search(r'\{[\s\S]*\}', clean_text)
+        if json_match:
+            clean_text = json_match.group()
+        
+        try:
+            parsed = json_module.loads(clean_text)
+        except json_module.JSONDecodeError:
+            print(f"[ParseBid] AI 返回解析失败: {response[:200]}")
+            return jsonify({"success": False, "error": "AI 返回格式异常，请重试"}), 502
+        
+        result = {
+            "product_name": str(parsed.get('product_name', '')).strip(),
+            "specs": str(parsed.get('specs', '')).strip(),
+            "requirement": str(parsed.get('requirement', '')).strip()
+        }
+        
+        if not result['product_name']:
+            return jsonify({"success": False, "error": "未能从文本中识别出产品名称"}), 400
+        
+        print(f"[ParseBid] 解析成功: {result['product_name']} | {result['specs']} | {result['requirement'][:30]}...")
         
         return jsonify({
             "success": True,
-            "data": candidates,
-            "total": len(candidates),
-            "method": recall_method
+            "data": result
         })
         
-    except ImportError as e:
-        return jsonify({ "success": False, "error": "向量服务模块不可用" }), 500
+    except ImportError:
+        return jsonify({"success": False, "error": "AI 服务模块不可用"}), 500
     except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
+        print(f"[ParseBid] 异常: {e}")
+        return _internal_error("接口处理失败", e)
 
 # ==========================================
 # API: 测试 AI 连通性
@@ -1152,13 +1793,13 @@ def test_ai():
     if auth_error:
         return auth_error
     try:
-        from ai_service import call_ai_api
+        from ai_service import call_ai_api, load_config as load_ai_config, get_last_ai_error
         import time
         
         body = request.get_json() or {}
         
-        # 从数据库获取配置
-        config = _get_all_config()
+        # 读取“有效配置”（文件/数据库/环境变量）
+        config = load_ai_config()
         
         # 如果前端传了专用配置就用，覆盖数据库配置
         if body.get('api_base_url'):
@@ -1167,7 +1808,21 @@ def test_ai():
             config['api_key'] = body['api_key']
         if body.get('model'):
             config['model'] = body['model']
-        
+
+        config['api_base_url'] = _normalize_config_value('api_base_url', config.get('api_base_url', ''))
+        config['model'] = _normalize_config_value('model', config.get('model', ''))
+
+        if not config.get('api_base_url') or not config.get('api_key') or not config.get('model'):
+            return jsonify({
+                "success": False,
+                "error": "AI 配置不完整，请检查 Base URL / API Key / 模型名称",
+                "debug": {
+                    "api_base_url": config.get('api_base_url', ''),
+                    "model": config.get('model', ''),
+                    "has_api_key": bool(config.get('api_key'))
+                }
+            }), 400
+
         # 简单测试
         start = time.time()
         res = call_ai_api("Test connection. Reply 'OK'.", config)
@@ -1176,15 +1831,23 @@ def test_ai():
         if res:
             return jsonify({
                 "success": True, 
-                "message": f"连接成功! (延迟: {latency:.0f}ms) 响应: {res[:20]}..."
+                "message": f"连接成功! (延迟: {latency:.0f}ms) Base: {config.get('api_base_url')} 模型: {config.get('model')} 响应: {res[:20]}..."
             })
         else:
+            ai_err = get_last_ai_error()
             return jsonify({
                 "success": False, 
-                "error": "连接失败: 无响应或认证错误"
+                "error": _build_ai_error_message(ai_err, "连接失败: 无响应或认证错误"),
+                "debug": {
+                    "api_base_url": config.get('api_base_url', ''),
+                    "model": config.get('model', ''),
+                    "api_key": _mask_secret(config.get('api_key', '')),
+                    "provider_status_code": ai_err.get('status_code'),
+                    "provider_error_type": ai_err.get('type')
+                }
             }), 502
     except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
+        return _internal_error("接口处理失败", e)
 
 # ==========================================
 # API: 获取产品规格列表
@@ -1205,6 +1868,9 @@ def get_product_specs():
             "data": [{"model": "规格1"}, {"model": "规格2"}, ...]
         }
     """
+    auth_error = _require_login()
+    if auth_error:
+        return auth_error
     try:
         manufacturer = request.args.get('manufacturer', '')
         product_name = request.args.get('product_name', '')
@@ -1230,7 +1896,7 @@ def get_product_specs():
         })
         
     except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
+        return _internal_error("接口处理失败", e)
 
 # ==========================================
 # API: 向量索引管理
@@ -1247,6 +1913,7 @@ _embedding_build_progress = {
     'error': None,
     'start_time': None
 }
+_EMBEDDING_BUILD_LOCK = threading.RLock()
 
 @app.route('/api/embedding/build', methods=['POST'])
 def build_embedding():
@@ -1264,11 +1931,12 @@ def build_embedding():
     if rate_error:
         return rate_error
 
-    if _embedding_build_progress['running']:
-        return jsonify({
-            "success": False,
-            "error": "已有构建任务在运行中"
-        }), 409
+    with _EMBEDDING_BUILD_LOCK:
+        if _embedding_build_progress['running']:
+            return jsonify({
+                "success": False,
+                "error": "已有构建任务在运行中"
+            }), 409
 
     try:
         import time
@@ -1297,7 +1965,7 @@ def build_embedding():
                     # 重新计算待处理数量
                     cursor.execute('SELECT COUNT(*) FROM products')
                     total_products = cursor.fetchone()[0]
-                    cursor.execute('SELECT COUNT(*) FROM embeddings')
+                    cursor.execute('SELECT COUNT(*) FROM embeddings WHERE embedding IS NOT NULL')
                     total_embeddings = cursor.fetchone()[0]
                     new_pending = max(0, total_products - total_embeddings)
                     
@@ -1317,11 +1985,12 @@ def build_embedding():
                 if in_progress:
                     task = in_progress[0]
                     print(f"[Admin] ⏳ 有任务正在处理中: {task['batch_id']}")
-                    _embedding_build_progress['batch_id'] = task['batch_id']
-                    _embedding_build_progress['running'] = True
-                    _embedding_build_progress['mode'] = 'batch'
-                    _embedding_build_progress['step'] = '有任务正在云端处理中...'
-                    _embedding_build_progress['total'] = task.get('count', 0)
+                    with _EMBEDDING_BUILD_LOCK:
+                        _embedding_build_progress['batch_id'] = task['batch_id']
+                        _embedding_build_progress['running'] = True
+                        _embedding_build_progress['mode'] = 'batch'
+                        _embedding_build_progress['step'] = '有任务正在云端处理中...'
+                        _embedding_build_progress['total'] = task.get('count', 0)
                     
                     return jsonify({
                         "success": True,
@@ -1341,7 +2010,7 @@ def build_embedding():
         cursor.execute('SELECT COUNT(*) FROM products')
         total_products = cursor.fetchone()[0]
         
-        cursor.execute('SELECT COUNT(*) FROM embeddings')
+        cursor.execute('SELECT COUNT(*) FROM embeddings WHERE embedding IS NOT NULL')
         total_embeddings = cursor.fetchone()[0]
         
         pending = max(0, total_products - total_embeddings)
@@ -1364,52 +2033,63 @@ def build_embedding():
         
         if pending < batch_threshold:
             # 逐条处理模式（实时）
-            _embedding_build_progress = {
-                'running': True,
-                'step': '正在生成向量...',
-                'current': 0,
-                'total': pending,
-                'mode': 'single',
-                'batch_id': None,
-                'error': None,
-                'start_time': time.time()
-            }
+            with _EMBEDDING_BUILD_LOCK:
+                _embedding_build_progress = {
+                    'running': True,
+                    'step': '正在生成向量...',
+                    'current': 0,
+                    'total': pending,
+                    'mode': 'single',
+                    'batch_id': None,
+                    'error': None,
+                    'start_time': time.time()
+                }
             
             print(f"[Admin] 使用逐条模式处理 {pending} 条")
             result = build_embeddings(data_lake.conn, force=force)
             
-            _embedding_build_progress['running'] = False
-            _embedding_build_progress['step'] = '完成'
-            _embedding_build_progress['current'] = result['processed']
+            with _EMBEDDING_BUILD_LOCK:
+                _embedding_build_progress['running'] = False
+                _embedding_build_progress['step'] = '完成'
+                _embedding_build_progress['current'] = result['processed']
+                _embedding_build_progress['error'] = None if result.get('success') else '部分或全部向量生成失败'
             
+            message = (
+                f"已完成！处理 {result['processed']} 条，跳过 {result['skipped']} 条"
+                if result.get('success')
+                else f"处理失败：成功 {result['processed']} 条，失败 {result.get('failed', 0)} 条"
+            )
             return jsonify({
                 "success": result['success'],
-                "message": f"已完成！处理 {result['processed']} 条，跳过 {result['skipped']} 条",
+                "message": message,
                 "data": {**result, "mode": "single", "pending": pending}
             })
         else:
             # 批处理模式（异步）
             from embedding_batch import generate_jsonl, upload_file, create_batch, save_batch_task
             
-            _embedding_build_progress = {
-                'running': True,
-                'step': '准备数据...',
-                'current': 0,
-                'total': pending,
-                'mode': 'batch',
-                'batch_id': None,
-                'error': None,
-                'start_time': time.time()
-            }
+            with _EMBEDDING_BUILD_LOCK:
+                _embedding_build_progress = {
+                    'running': True,
+                    'step': '准备数据...',
+                    'current': 0,
+                    'total': pending,
+                    'mode': 'batch',
+                    'batch_id': None,
+                    'error': None,
+                    'start_time': time.time()
+                }
             
             print(f"[Admin] 使用批处理模式处理 {pending} 条")
             
             # Step 1: 生成 JSONL
-            _embedding_build_progress['step'] = '正在准备数据文件...'
+            with _EMBEDDING_BUILD_LOCK:
+                _embedding_build_progress['step'] = '正在准备数据文件...'
             result = generate_jsonl(data_lake.conn, incremental=True)
             
             if result['count'] == 0:
-                _embedding_build_progress['running'] = False
+                with _EMBEDDING_BUILD_LOCK:
+                    _embedding_build_progress['running'] = False
                 return jsonify({
                     "success": True,
                     "message": "所有产品已有最新向量",
@@ -1417,26 +2097,31 @@ def build_embedding():
                 })
             
             # Step 2: 上传文件
-            _embedding_build_progress['step'] = '正在上传数据...'
-            _embedding_build_progress['current'] = 1
+            with _EMBEDDING_BUILD_LOCK:
+                _embedding_build_progress['step'] = '正在上传数据...'
+                _embedding_build_progress['current'] = 1
             file_id = upload_file(result['file_path'])
             if not file_id:
-                _embedding_build_progress['running'] = False
-                _embedding_build_progress['error'] = '上传失败'
+                with _EMBEDDING_BUILD_LOCK:
+                    _embedding_build_progress['running'] = False
+                    _embedding_build_progress['error'] = '上传失败'
                 return jsonify({"success": False, "error": "上传数据失败"}), 500
             
             # Step 3: 创建批处理任务
-            _embedding_build_progress['step'] = '正在创建处理任务...'
-            _embedding_build_progress['current'] = 2
+            with _EMBEDDING_BUILD_LOCK:
+                _embedding_build_progress['step'] = '正在创建处理任务...'
+                _embedding_build_progress['current'] = 2
             batch_id = create_batch(file_id)
             if not batch_id:
-                _embedding_build_progress['running'] = False
-                _embedding_build_progress['error'] = '创建任务失败'
+                with _EMBEDDING_BUILD_LOCK:
+                    _embedding_build_progress['running'] = False
+                    _embedding_build_progress['error'] = '创建任务失败'
                 return jsonify({"success": False, "error": "创建批处理任务失败"}), 500
             
-            _embedding_build_progress['batch_id'] = batch_id
-            _embedding_build_progress['step'] = '后台处理中，请稍后查看进度...'
-            _embedding_build_progress['current'] = 3
+            with _EMBEDDING_BUILD_LOCK:
+                _embedding_build_progress['batch_id'] = batch_id
+                _embedding_build_progress['step'] = '后台处理中，请稍后查看进度...'
+                _embedding_build_progress['current'] = 3
             
             # 保存任务记录（用于智能检测）
             save_batch_task(batch_id, result['count'])
@@ -1457,17 +2142,19 @@ def build_embedding():
             })
         
     except ImportError as e:
-        _embedding_build_progress['running'] = False
+        with _EMBEDDING_BUILD_LOCK:
+            _embedding_build_progress['running'] = False
         return jsonify({
             "success": False,
             "error": f"模块未安装: {e}"
         }), 501
     except Exception as e:
-        _embedding_build_progress['running'] = False
-        _embedding_build_progress['error'] = str(e)
+        with _EMBEDDING_BUILD_LOCK:
+            _embedding_build_progress['running'] = False
+            _embedding_build_progress['error'] = str(e)
         import traceback
         traceback.print_exc()
-        return jsonify({"success": False, "error": str(e)}), 500
+        return _internal_error("接口处理失败", e)
 
 @app.route('/api/embedding/progress', methods=['GET'])
 def embedding_progress():
@@ -1479,7 +2166,8 @@ def embedding_progress():
         return auth_error
     
     import time
-    progress = _embedding_build_progress.copy()
+    with _EMBEDDING_BUILD_LOCK:
+        progress = _embedding_build_progress.copy()
     
     # 如果是批处理模式且正在运行，检查状态
     if progress['running'] and progress['mode'] == 'batch' and progress['batch_id']:
@@ -1495,6 +2183,10 @@ def embedding_progress():
                     progress['step'] = '处理失败'
                     progress['error'] = status.get('error', '未知错误')
                     progress['running'] = False
+                    with _EMBEDDING_BUILD_LOCK:
+                        _embedding_build_progress['step'] = progress['step']
+                        _embedding_build_progress['error'] = progress['error']
+                        _embedding_build_progress['running'] = False
                 elif batch_status in ('validating', 'in_progress'):
                     # 计算预估进度
                     elapsed = time.time() - (progress['start_time'] or time.time())
@@ -1525,7 +2217,8 @@ def embedding_import():
     try:
         from embedding_batch import download_results, import_results
         
-        batch_id = _embedding_build_progress.get('batch_id')
+        with _EMBEDDING_BUILD_LOCK:
+            batch_id = _embedding_build_progress.get('batch_id')
         if not batch_id:
             body = request.get_json() or {}
             batch_id = body.get('batch_id')
@@ -1533,17 +2226,29 @@ def embedding_import():
         if not batch_id:
             return jsonify({"success": False, "error": "没有待导入的任务"}), 400
         
-        _embedding_build_progress['step'] = '正在下载结果...'
+        with _EMBEDDING_BUILD_LOCK:
+            _embedding_build_progress['step'] = '正在下载结果...'
         result_file = download_results(batch_id)
         if not result_file:
             return jsonify({"success": False, "error": "下载结果失败，任务可能未完成"}), 400
         
-        _embedding_build_progress['step'] = '正在导入数据库...'
+        with _EMBEDDING_BUILD_LOCK:
+            _embedding_build_progress['step'] = '正在导入数据库...'
         result = import_results(result_file, data_lake.conn)
+        if not result.get('success', True):
+            with _EMBEDDING_BUILD_LOCK:
+                _embedding_build_progress['running'] = False
+                _embedding_build_progress['error'] = '导入失败或无有效结果'
+            return jsonify({
+                "success": False,
+                "error": f"导入失败: 成功 {result.get('imported', 0)} 条, 失败 {result.get('failed', 0)} 条",
+                "data": result
+            }), 502
         
-        _embedding_build_progress['running'] = False
-        _embedding_build_progress['step'] = '完成'
-        _embedding_build_progress['batch_id'] = None
+        with _EMBEDDING_BUILD_LOCK:
+            _embedding_build_progress['running'] = False
+            _embedding_build_progress['step'] = '完成'
+            _embedding_build_progress['batch_id'] = None
         
         return jsonify({
             "success": True,
@@ -1554,7 +2259,7 @@ def embedding_import():
     except Exception as e:
         import traceback
         traceback.print_exc()
-        return jsonify({"success": False, "error": str(e)}), 500
+        return _internal_error("接口处理失败", e)
 
 @app.route('/api/embedding/test', methods=['POST'])
 def test_embedding():
@@ -1567,26 +2272,30 @@ def test_embedding():
         return rate_error
 
     try:
-        from embedding_service import get_single_embedding
+        from embedding_service import get_single_embedding, load_config as load_embedding_config
         import time
         
         body = request.get_json() or {}
         
-        # 从数据库获取配置
-        config = _get_all_config()
+        # 读取“有效配置”（文件/数据库/环境变量）
+        config = load_embedding_config()
         
         # 如果前端传了专用配置就用，覆盖数据库配置
         if body.get('embedding_api_url'):
-            config['api_base_url'] = body['embedding_api_url']
+            config['embedding_api_url'] = body['embedding_api_url']
         if body.get('embedding_api_key'):
-            config['api_key'] = body['embedding_api_key']
+            config['embedding_api_key'] = body['embedding_api_key']
         if body.get('embedding_model'):
             config['embedding_model'] = body['embedding_model']
         
-        if not config.get('api_key'):
+        config['embedding_api_url'] = _normalize_config_value('embedding_api_url', config.get('embedding_api_url', ''))
+        config['embedding_model'] = _normalize_config_value('embedding_model', config.get('embedding_model', ''))
+
+        has_key = bool(config.get('embedding_api_key') or config.get('api_key') or os.getenv('EMBEDDING_API_KEY'))
+        if not has_key:
             return jsonify({
                 "success": False,
-                "error": "请填写 API Key"
+                "error": "请填写 Embedding API Key（或先在配置里保存）"
             }), 400
         
         print("[Admin] 测试 Embedding 连通性...")
@@ -1599,12 +2308,18 @@ def test_embedding():
         if result and len(result) > 0:
             return jsonify({
                 "success": True,
-                "message": f"连接成功! 延迟: {latency:.0f}ms, 向量维度: {len(result)}"
+                "message": f"连接成功! 延迟: {latency:.0f}ms, 向量维度: {len(result)} Base: {(config.get('embedding_api_url') or config.get('api_base_url') or '').rstrip('/')} 模型: {config.get('embedding_model')}"
             })
         else:
             return jsonify({
                 "success": False,
-                "error": "连接失败: 无响应或认证错误"
+                "error": "连接失败: 无响应或认证错误",
+                "debug": {
+                    "embedding_api_url": config.get('embedding_api_url', ''),
+                    "embedding_model": config.get('embedding_model', ''),
+                    "has_embedding_api_key": bool(config.get('embedding_api_key')),
+                    "has_fallback_api_key": bool(config.get('api_key'))
+                }
             }), 502
             
     except ImportError:
@@ -1615,7 +2330,7 @@ def test_embedding():
     except Exception as e:
         import traceback
         traceback.print_exc()
-        return jsonify({"success": False, "error": str(e)}), 500
+        return _internal_error("接口处理失败", e)
 
 @app.route('/api/embedding/stats', methods=['GET'])
 def embedding_stats():
@@ -1632,7 +2347,7 @@ def embedding_stats():
         
         # 已生成向量数（快速）
         try:
-            cursor.execute('SELECT COUNT(*) FROM embeddings')
+            cursor.execute('SELECT COUNT(*) FROM embeddings WHERE embedding IS NOT NULL')
             total_embeddings = cursor.fetchone()[0]
         except:
             total_embeddings = 0
@@ -1653,7 +2368,7 @@ def embedding_stats():
             }
         })
     except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
+        return _internal_error("接口处理失败", e)
 
 # ==========================================
 # API: 批量向量处理（Batch API）
@@ -1726,7 +2441,7 @@ def batch_embedding_start():
     except Exception as e:
         import traceback
         traceback.print_exc()
-        return jsonify({"success": False, "error": str(e)}), 500
+        return _internal_error("接口处理失败", e)
 
 @app.route('/api/embedding/batch/status', methods=['GET'])
 def batch_embedding_status():
@@ -1755,7 +2470,7 @@ def batch_embedding_status():
             "error": "批处理模块未安装"
         }), 501
     except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
+        return _internal_error("接口处理失败", e)
 
 @app.route('/api/embedding/batch/import', methods=['POST'])
 def batch_embedding_import():
@@ -1793,6 +2508,12 @@ def batch_embedding_import():
         
         # 导入到数据库
         result = import_results(result_file, data_lake.conn)
+        if not result.get('success', True):
+            return jsonify({
+                "success": False,
+                "error": f"导入失败: 成功 {result.get('imported', 0)} 条, 失败 {result.get('failed', 0)} 条",
+                "data": result
+            }), 502
         
         return jsonify({
             "success": True,
@@ -1808,7 +2529,7 @@ def batch_embedding_import():
     except Exception as e:
         import traceback
         traceback.print_exc()
-        return jsonify({"success": False, "error": str(e)}), 500
+        return _internal_error("接口处理失败", e)
 
 
 # ==========================================
@@ -1862,6 +2583,21 @@ def _get_all_config() -> Dict:
     
     return config
 
+
+def _sanitize_config_for_response(config: Dict) -> Dict:
+    safe_config = dict(config or {})
+    has_api_key = bool(safe_config.get('api_key'))
+    has_embedding_api_key = bool(safe_config.get('embedding_api_key'))
+    safe_config['api_key'] = ''
+    safe_config['embedding_api_key'] = ''
+    return {
+        "data": safe_config,
+        "meta": {
+            "has_api_key": has_api_key,
+            "has_embedding_api_key": has_embedding_api_key
+        }
+    }
+
 @app.route('/api/config', methods=['GET'])
 def get_config():
     """获取 API 配置"""
@@ -1870,9 +2606,15 @@ def get_config():
         return auth_error
     try:
         config = _get_all_config()
-        return jsonify({"success": True, "data": config})
+        response_payload = _sanitize_config_for_response(config)
+
+        return jsonify({
+            "success": True,
+            "data": response_payload["data"],
+            "meta": response_payload["meta"]
+        })
     except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
+        return _internal_error("接口处理失败", e)
 
 @app.route('/api/config', methods=['POST'])
 def save_config():
@@ -1881,18 +2623,42 @@ def save_config():
     if auth_error:
         return auth_error
     try:
-        body = request.get_json()
+        body = request.get_json() or {}
+        if not isinstance(body, dict):
+            return jsonify({"success": False, "error": "请求体必须是 JSON 对象"}), 400
         config_keys = ['api_base_url', 'api_key', 'model', 'embedding_api_url', 'embedding_api_key', 'embedding_model']
+        updated_keys = []
         
         for key in config_keys:
-            value = body.get(key, '').strip()
-            if value:  # 只保存非空值
+            if key not in body:
+                continue
+            value = _normalize_config_value(key, body.get(key, ''))
+            if value:  # 只保存非空值（留空表示不修改）
                 _set_db_config(key, value)
+                updated_keys.append(key)
         
-        return jsonify({"success": True, "message": "配置已保存到数据库"})
+        config = _get_all_config()
+        response_payload = _sanitize_config_for_response(config)
+
+        # 日志仅打印掩码，便于排查“是否真的写入数据库”
+        if updated_keys:
+            print(f"[Config] 更新配置: {updated_keys}, api_key={_mask_secret(config.get('api_key',''))}, embedding_api_key={_mask_secret(config.get('embedding_api_key',''))}")
+        else:
+            print("[Config] 未更新任何配置（可能所有字段均为空）")
+
+        return jsonify({
+            "success": True,
+            "message": "配置已保存到数据库",
+            "data": response_payload["data"],
+            "meta": {
+                "updated_keys": updated_keys,
+                "has_api_key": response_payload["meta"]["has_api_key"],
+                "has_embedding_api_key": response_payload["meta"]["has_embedding_api_key"]
+            }
+        })
         
     except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
+        return _internal_error("接口处理失败", e)
 
 # ==========================================
 # 主入口
