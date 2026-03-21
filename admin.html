@@ -289,8 +289,8 @@
                                     </svg>
                                 </div>
                             </div>
-                            <div class="text-3xl font-heading font-bold text-text" id="statEmbedding">--</div>
-                            <p class="text-xs text-text-light mt-1" id="statEmbeddingCount">--</p>
+                            <div class="text-3xl font-heading font-bold text-text" id="statEmbedding">加载中...</div>
+                            <p class="text-xs text-text-light mt-1" id="statEmbeddingCount">正在读取智能索引情况...</p>
                         </div>
                         <div class="bg-white rounded-2xl p-6 border border-border card-shadow">
                             <div class="flex items-center justify-between mb-3">
@@ -440,7 +440,7 @@
 
                             <div class="border-t border-border pt-4 mt-4">
                                 <h4 class="text-sm font-semibold text-text mb-2">智能搜索数据</h4>
-                                <p class="muted mb-3" id="embeddingPending">待处理: --</p>
+                                <p class="muted mb-3" id="embeddingPending">待处理: 读取中...</p>
                                 <div class="flex gap-3">
                                     <button class="btn" id="btnBuildIndex" onclick="buildIndex()">生成智能索引</button>
                                     <button class="btn secondary" id="btnImportResult" onclick="importResult()" style="display:none;">导入结果</button>
@@ -735,6 +735,17 @@
             setTimeout(() => toast.classList.remove('show'), 2200);
         }
 
+        function setEmbeddingStatsLoadingState() {
+            document.getElementById('statEmbedding').textContent = '加载中...';
+            document.getElementById('statEmbeddingCount').textContent = '正在读取智能索引情况...';
+            document.getElementById('embeddingPending').textContent = '待处理: 读取中...';
+        }
+
+        function renderSyncHistoryMessage(message) {
+            const container = document.getElementById('syncHistoryList');
+            container.innerHTML = `<div class="text-center py-2 text-text-light">${escapeHtml(message)}</div>`;
+        }
+
         function goHome() {
             window.location.href = '/';
         }
@@ -818,7 +829,8 @@
                 document.getElementById('statUpdated').textContent = `最后同步：${stats.data.last_sync || '--'}`;
             }
             
-            // 尝试加载 embedding 统计，如果失败（如权限不足）则显示默认值
+            setEmbeddingStatsLoadingState();
+
             const embeddingStats = await fetchJSON(`${API_BASE}/api/embedding/stats`);
             if (embeddingStats.success) {
                 const data = embeddingStats.data;
@@ -826,9 +838,11 @@
                 document.getElementById('statEmbeddingCount').textContent = `已索引 ${data.total_embeddings} / ${data.total_products}`;
                 document.getElementById('embeddingPending').textContent = `待处理: ${data.pending || 0} 条`;
             } else {
-                // 权限不足或其他错误，显示默认值
-                document.getElementById('statEmbedding').textContent = '--';
-                document.getElementById('statEmbeddingCount').textContent = '需要登录查看';
+                const authError = embeddingStats.error === '无权限访问' || embeddingStats.error === '未登录';
+                document.getElementById('statEmbedding').textContent = authError ? '需登录' : '读取失败';
+                document.getElementById('statEmbeddingCount').textContent = authError
+                    ? '请先登录管理员账号后查看'
+                    : (embeddingStats.error || '请稍后刷新重试');
                 document.getElementById('embeddingPending').textContent = '--';
             }
         }
@@ -1140,13 +1154,23 @@
         }
 
         async function loadSyncHistory() {
+            if (!ensureSyncApiKey(false)) {
+                renderSyncHistoryMessage('未配置同步密钥，暂时无法查看同步记录');
+                return;
+            }
+
             const data = await fetchJSON(`${API_BASE}/api/sync/history`, {
                 headers: buildSyncHeaders()
             });
             const container = document.getElementById('syncHistoryList');
 
-            if (!data.success || !data.data || data.data.length === 0) {
-                container.innerHTML = '<div class="text-center py-2 text-text-light">暂无同步记录</div>';
+            if (!data.success) {
+                renderSyncHistoryMessage('同步记录暂时无法读取，请检查同步密钥后重试');
+                return;
+            }
+
+            if (!data.data || data.data.length === 0) {
+                container.innerHTML = '<div class="text-center py-2 text-text-light">暂未产生同步记录</div>';
                 return;
             }
 
@@ -1178,9 +1202,10 @@
         }
 
         // 刷新同步状态
-        async function refreshSyncStatus() {
+        async function refreshSyncStatus(showMissingKeyToast = true) {
             if (!ensureSyncApiKey(false)) {
-                if (!syncAuthWarned) {
+                renderSyncHistoryMessage('未配置同步密钥，暂时无法查看同步记录');
+                if (showMissingKeyToast && !syncAuthWarned) {
                     showToast('同步监控需要 SYNC_API_KEY');
                     syncAuthWarned = true;
                 }
@@ -1646,7 +1671,7 @@
             await loadUsers();
             await loadAudit();
             await loadSyncHistory();
-            setTimeout(refreshSyncStatus, 1000);
+            setTimeout(() => refreshSyncStatus(false), 1000);
         }
 
         bootstrap();
