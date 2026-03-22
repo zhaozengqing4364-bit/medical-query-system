@@ -553,8 +553,73 @@
                             </div>
                         </div>
 
+                        <div class="mt-6 pt-6 border-t border-border">
+                            <div class="bg-amber-50 rounded-xl p-5 border border-amber-100">
+                                <h4 class="text-sm font-semibold text-text mb-3 flex items-center gap-2">
+                                    <div class="w-6 h-6 bg-amber-100 rounded-lg flex items-center justify-center">
+                                        <svg class="w-3.5 h-3.5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                    </div>
+                                    自动更新设置
+                                </h4>
+                                <p class="text-sm text-text-muted mb-4">让系统按固定时间自动拉取最新数据。保存后由同步服务按计划执行，不需要人工再点开始同步。</p>
+
+                                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                    <div>
+                                        <label>是否开启自动更新</label>
+                                        <select id="autoSyncEnabled" onchange="updateAutoSyncSummary()">
+                                            <option value="0">关闭</option>
+                                            <option value="1">开启</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label>自动执行内容</label>
+                                        <select id="autoSyncType" onchange="updateAutoSyncSummary()">
+                                            <option value="full">完整同步（推荐）</option>
+                                            <option value="data">只更新数据</option>
+                                            <option value="vectors">只补智能索引</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label>执行周期</label>
+                                        <select id="autoSyncSchedule" onchange="toggleAutoSyncWeekday(); updateAutoSyncSummary()">
+                                            <option value="daily">每天</option>
+                                            <option value="weekly">每周一次</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label>执行时间</label>
+                                        <input id="autoSyncTime" type="time" value="02:00" onchange="updateAutoSyncSummary()" />
+                                    </div>
+                                    <div id="autoSyncWeekdayWrap">
+                                        <label>每周执行日</label>
+                                        <select id="autoSyncWeekday" onchange="updateAutoSyncSummary()">
+                                            <option value="1">星期一</option>
+                                            <option value="2">星期二</option>
+                                            <option value="3">星期三</option>
+                                            <option value="4">星期四</option>
+                                            <option value="5">星期五</option>
+                                            <option value="6">星期六</option>
+                                            <option value="7">星期日</option>
+                                        </select>
+                                    </div>
+                                    <div class="bg-white rounded-xl p-4 border border-amber-100">
+                                        <div class="text-xs text-text-light mb-1">执行摘要</div>
+                                        <div class="text-sm font-semibold text-text" id="autoSyncSummary">自动更新已关闭</div>
+                                        <div class="text-xs text-text-light mt-2" id="autoSyncNextRun">下一次执行：未开启</div>
+                                    </div>
+                                </div>
+
+                                <div class="mt-4 flex flex-wrap gap-3">
+                                    <button class="btn" id="btnSaveAutoSync" onclick="saveAutoSyncSettings()">保存自动更新设置</button>
+                                    <div class="text-xs text-text-light leading-5">说明：同步服务需要保持运行，计划任务才会自动触发。</div>
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="flex justify-between items-center mt-6 pt-6 border-t border-border">
-                            <button class="btn" onclick="saveConfig()">保存所有配置</button>
+                            <button class="btn" onclick="saveConfig()">保存服务连接配置</button>
                             <button class="btn secondary" onclick="showConfigHelp()">配置帮助</button>
                         </div>
                     </section>
@@ -673,6 +738,7 @@
         let syncAuthWarned = false;
         let currentAdminSection = 'overview';
         let adminNavInitialized = false;
+        let autoSyncSaving = false;
 
         function switchAdminSection(sectionName) {
             const target = sectionName || 'overview';
@@ -844,6 +910,118 @@
                     ? '请先登录管理员账号后查看'
                     : (embeddingStats.error || '请稍后刷新重试');
                 document.getElementById('embeddingPending').textContent = '--';
+            }
+        }
+
+        function formatAutoSyncDateTime(value) {
+            if (!value) return '未开启';
+            const date = new Date(value);
+            if (Number.isNaN(date.getTime())) return value;
+            return date.toLocaleString('zh-CN', { hour12: false });
+        }
+
+        function toggleAutoSyncWeekday() {
+            const wrap = document.getElementById('autoSyncWeekdayWrap');
+            const schedule = document.getElementById('autoSyncSchedule').value;
+            wrap.style.display = schedule === 'weekly' ? 'block' : 'none';
+        }
+
+        function updateAutoSyncSummary(data = null) {
+            const enabled = data ? !!data.auto_sync_enabled : document.getElementById('autoSyncEnabled').value === '1';
+            const schedule = data ? data.auto_sync_schedule : document.getElementById('autoSyncSchedule').value;
+            const time = data ? data.auto_sync_time : document.getElementById('autoSyncTime').value;
+            const weekday = Number(data ? data.auto_sync_weekday : document.getElementById('autoSyncWeekday').value);
+            const syncType = data ? data.auto_sync_type : document.getElementById('autoSyncType').value;
+            const summaryEl = document.getElementById('autoSyncSummary');
+            const nextRunEl = document.getElementById('autoSyncNextRun');
+            const typeMap = {
+                full: '完整同步',
+                data: '只更新数据',
+                vectors: '只补智能索引'
+            };
+            const weekdayMap = {
+                1: '星期一',
+                2: '星期二',
+                3: '星期三',
+                4: '星期四',
+                5: '星期五',
+                6: '星期六',
+                7: '星期日'
+            };
+
+            if (!enabled) {
+                summaryEl.textContent = '自动更新已关闭';
+                nextRunEl.textContent = '下一次执行：未开启';
+                return;
+            }
+
+            if (schedule === 'weekly') {
+                summaryEl.textContent = `${weekdayMap[weekday] || '每周一次'} ${time} 自动执行${typeMap[syncType] || '完整同步'}`;
+            } else {
+                summaryEl.textContent = `每天 ${time} 自动执行${typeMap[syncType] || '完整同步'}`;
+            }
+
+            const nextRunAt = data && data.next_run_at ? formatAutoSyncDateTime(data.next_run_at) : '保存后自动计算';
+            nextRunEl.textContent = `下一次执行：${nextRunAt}`;
+        }
+
+        async function loadAutoSyncSettings() {
+            const data = await fetchJSON(`${API_BASE}/api/auto-sync/settings`);
+            if (!data.success || !data.data) {
+                updateAutoSyncSummary();
+                return;
+            }
+
+            document.getElementById('autoSyncEnabled').value = data.data.auto_sync_enabled ? '1' : '0';
+            document.getElementById('autoSyncSchedule').value = data.data.auto_sync_schedule || 'daily';
+            document.getElementById('autoSyncTime').value = data.data.auto_sync_time || '02:00';
+            document.getElementById('autoSyncWeekday').value = String(data.data.auto_sync_weekday || 1);
+            document.getElementById('autoSyncType').value = data.data.auto_sync_type || 'full';
+            toggleAutoSyncWeekday();
+            updateAutoSyncSummary(data.data);
+        }
+
+        async function saveAutoSyncSettings() {
+            if (autoSyncSaving) {
+                showToast('自动更新设置正在保存，请稍候...');
+                return;
+            }
+
+            const saveBtn = document.getElementById('btnSaveAutoSync');
+            autoSyncSaving = true;
+            saveBtn.disabled = true;
+            showToast('正在保存自动更新设置...');
+            const payload = {
+                auto_sync_enabled: document.getElementById('autoSyncEnabled').value === '1',
+                auto_sync_schedule: document.getElementById('autoSyncSchedule').value,
+                auto_sync_time: document.getElementById('autoSyncTime').value || '02:00',
+                auto_sync_weekday: Number(document.getElementById('autoSyncWeekday').value || '1'),
+                auto_sync_type: document.getElementById('autoSyncType').value
+            };
+
+            try {
+                const data = await fetchJSON(`${API_BASE}/api/auto-sync/settings`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (data.success && data.data) {
+                    document.getElementById('autoSyncEnabled').value = data.data.auto_sync_enabled ? '1' : '0';
+                    document.getElementById('autoSyncSchedule').value = data.data.auto_sync_schedule || 'daily';
+                    document.getElementById('autoSyncTime').value = data.data.auto_sync_time || '02:00';
+                    document.getElementById('autoSyncWeekday').value = String(data.data.auto_sync_weekday || 1);
+                    document.getElementById('autoSyncType').value = data.data.auto_sync_type || 'full';
+                    toggleAutoSyncWeekday();
+                    updateAutoSyncSummary(data.data);
+                    showToast('✓ 自动更新设置已保存');
+                    return;
+                }
+
+                showToast('保存失败: ' + (data.error || '未知错误'));
+            } finally {
+                autoSyncSaving = false;
+                saveBtn.disabled = false;
             }
         }
 
@@ -1668,6 +1846,7 @@
             await loadMe();
             await loadStats();
             await loadConfig();
+            await loadAutoSyncSettings();
             await loadUsers();
             await loadAudit();
             await loadSyncHistory();

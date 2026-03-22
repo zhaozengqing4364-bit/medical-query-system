@@ -21,11 +21,13 @@ import json
 import sqlite3
 import threading
 import hmac
+import time
 from datetime import datetime, date, timezone, timedelta
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse
 from typing import List
 from db_backend import connect as db_connect
+from sync_schedule import compute_next_run_iso, get_due_slot_id, normalize_auto_sync_settings
 
 # 加载 .env 文件（如果存在）
 def _load_env_file():
@@ -229,6 +231,263 @@ def get_sync_history(limit: int = 10) -> list:
     except Exception as e:
         print(f"[Sync] 获取同步历史失败: {e}")
         return []
+
+
+def _ensure_system_config_table(conn) -> None:
+    cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS system_config (
+            key TEXT PRIMARY KEY,
+            value TEXT,
+            updated_at TEXT
+        )
+    ''')
+    conn.commit()
+
+
+def _get_system_config_map(keys: List[str]) -> dict:
+    try:
+        conn = db_connect(DB_PATH)
+        _ensure_system_config_table(conn)
+        cursor = conn.cursor()
+        if keys:
+            placeholders = ','.join('?' for _ in keys)
+            cursor.execute(
+                f'SELECT key, value FROM system_config WHERE key IN ({placeholders})',
+                keys
+            )
+        else:
+            cursor.execute('SELECT key, value FROM system_config')
+        rows = cursor.fetchall()
+        conn.close()
+        return {row[0]: row[1] for row in rows if row and row[0]}
+    except Exception as e:
+        print(f"[Sync] 读取 system_config 失败: {e}")
+        return {}
+
+
+def _set_system_config_values(payload: dict) -> None:
+    if not payload:
+        return
+    conn = db_connect(DB_PATH)
+    _ensure_system_config_table(conn)
+    cursor = conn.cursor()
+    now = datetime.now(timezone.utc).isoformat()
+    for key, value in payload.items():
+        cursor.execute(
+            '''
+            INSERT OR REPLACE INTO system_config (key, value, updated_at)
+            VALUES (?, ?, ?)
+            ''',
+            (key, str(value), now)
+        )
+    conn.commit()
+    conn.close()
+
+
+def _get_auto_sync_settings() -> dict:
+    keys = [
+        'auto_sync_enabled',
+        'auto_sync_schedule',
+        'auto_sync_time',
+        'auto_sync_weekday',
+        'auto_sync_type',
+    ]
+    raw = _get_system_config_map(keys)
+    settings = normalize_auto_sync_settings(raw)
+    settings['next_run_at'] = compute_next_run_iso(settings)
+    return settings
+
+
+def _start_sync_task(sync_type: str = 'full', trigger_source: str = 'manual') -> dict:
+    global is_syncing, stop_requested
+
+    if sync_type not in ('full', 'data', 'vectors'):
+        return {'success': False, 'error': f'Unsupported sync type: {sync_type}'}
+
+    try:
+        from auto_sync import acquire_lock_with_fd as acquire_process_lock, release_lock as release_process_lock
+    except Exception as e:
+        return {'success': False, 'error': f'无法加载同步锁模块: {e}'}
+
+    with sync_lock:
+        if is_syncing:
+            return {
+                'success': False,
+                'error': '同步正在进行中',
+                'data': dict(_sync_progress)
+            }
+
+    if not acquire_process_lock():
+        return {'success': False, 'error': '已有其他进程在执行同步任务'}
+
+    with sync_lock:
+        is_syncing = True
+        stop_requested = False
+
+    reset_sync_progress()
+    update_sync_progress('preparing', 0, 100, f'准备执行 {sync_type} 同步...')
+
+    def run_sync_with_progress():
+        global is_syncing, stop_requested
+        start_time = datetime.now(timezone.utc)
+        status = 'success'
+        message = ''
+        total_records = 0
+        data_lake = None
+
+        try:
+            sys.path.insert(0, os.path.dirname(__file__))
+            from udid_sync import sync_incremental, DB_PATH as SYNC_DB_PATH
+            from udid_hybrid_system import LocalDataLake
+            from auto_sync import run_vector_sync_batch, run_vector_sync_quick
+
+            data_lake = LocalDataLake(db_path=SYNC_DB_PATH)
+
+            def progress_callback(progress_info):
+                if _is_stop_requested():
+                    raise RuntimeError('同步已被用户停止')
+                update_sync_progress(
+                    stage=progress_info.get('stage', 'processing'),
+                    current=progress_info.get('current', 0),
+                    total=progress_info.get('total', 100),
+                    message=progress_info.get('message', '处理中...')
+                )
+
+            if sync_type in ('full', 'data'):
+                update_sync_progress('checking', 5, 100, '检查增量更新...')
+                data_result = sync_incremental(data_lake, progress_callback=progress_callback)
+                if not data_result.get('success'):
+                    status = 'failed'
+                    message = data_result.get('message', '数据同步失败')
+                    raise RuntimeError(message)
+                total_records += data_result.get('total_records', 0)
+                message = data_result.get('message', '')
+
+            if _is_stop_requested():
+                raise RuntimeError('同步已被用户停止')
+
+            if sync_type in ('full', 'vectors'):
+                update_sync_progress('vectors', 75, 100, '开始生成向量...')
+                conn = db_connect(SYNC_DB_PATH)
+                try:
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT COUNT(*) FROM embedding_update_queue WHERE status = 'pending'")
+                    pending_count = cursor.fetchone()[0]
+                    if pending_count > 0:
+                        if _is_stop_requested():
+                            raise RuntimeError('同步已被用户停止')
+                        if pending_count <= 1000:
+                            vector_result = run_vector_sync_quick(conn, batch_size=pending_count)
+                        else:
+                            vector_result = run_vector_sync_batch(
+                                conn,
+                                max_records=min(pending_count, 50000),
+                                should_stop=_is_stop_requested
+                            )
+                        if vector_result.get('stopped') or vector_result.get('error') == 'STOP_REQUESTED':
+                            raise RuntimeError('同步已被用户停止')
+                        if not vector_result.get('success'):
+                            status = 'failed'
+                            message = vector_result.get('error', '向量同步失败')
+                            raise RuntimeError(message)
+                        message = f"向量处理完成，成功 {vector_result.get('processed', 0)} 条"
+                    else:
+                        message = '无待处理向量'
+                finally:
+                    conn.close()
+
+            if _is_stop_requested():
+                status = 'stopped'
+                message = '同步已停止'
+                update_sync_progress('stopped', 0, 100, message)
+            else:
+                status = 'success'
+                update_sync_progress('completed', 100, 100, message or '同步完成')
+
+        except Exception as e:
+            error_msg = str(e)
+            if '已被用户停止' in error_msg:
+                status = 'stopped'
+                message = '同步已停止'
+                update_sync_progress('stopped', 0, 100, message)
+            else:
+                status = 'failed'
+                message = error_msg
+                print(f"[Sync] 同步失败: {error_msg}")
+                update_sync_progress('failed', 0, 100, f'同步失败: {error_msg}')
+        finally:
+            elapsed = int((datetime.now(timezone.utc) - start_time).total_seconds())
+            history_message = message
+            if trigger_source == 'schedule' and history_message:
+                history_message = f"[自动更新] {history_message}"
+            save_sync_history(
+                sync_type=sync_type,
+                records_count=total_records,
+                status=status,
+                message=history_message,
+                duration_seconds=elapsed
+            )
+            with sync_lock:
+                is_syncing = False
+                stop_requested = False
+                _sync_progress['is_running'] = False
+            try:
+                if data_lake is not None:
+                    data_lake.release_thread_connection()
+            except Exception as release_err:
+                print(f"[Sync] 释放线程数据库连接失败: {release_err}")
+            try:
+                release_process_lock()
+            except Exception as lock_err:
+                print(f"[Sync] 释放进程锁失败: {lock_err}")
+
+    thread = threading.Thread(target=run_sync_with_progress, name=f"sync-{trigger_source}-{sync_type}")
+    thread.daemon = True
+    try:
+        thread.start()
+    except Exception as e:
+        with sync_lock:
+            is_syncing = False
+            stop_requested = False
+            _sync_progress['is_running'] = False
+        try:
+            release_process_lock()
+        except Exception:
+            pass
+        return {'success': False, 'error': f'启动后台同步线程失败: {e}'}
+
+    return {
+        'success': True,
+        'message': f'{sync_type} 同步已启动',
+        'data': {**_sync_progress, 'sync_type': sync_type}
+    }
+
+
+def _auto_sync_scheduler_loop():
+    while True:
+        try:
+            settings = _get_auto_sync_settings()
+            slot_id = get_due_slot_id(settings)
+            if slot_id:
+                state = _get_system_config_map(['auto_sync_last_slot'])
+                if state.get('auto_sync_last_slot', '') != slot_id:
+                    result = _start_sync_task(settings['auto_sync_type'], trigger_source='schedule')
+                    payload = {
+                        'auto_sync_last_slot': slot_id,
+                        'auto_sync_last_attempt_at': datetime.now(timezone.utc).isoformat(),
+                        'auto_sync_last_result': 'success' if result.get('success') else 'failed',
+                        'auto_sync_last_message': result.get('message') or result.get('error', ''),
+                    }
+                    _set_system_config_values(payload)
+                    if result.get('success'):
+                        print(f"[Sync] 自动更新已触发: {settings['auto_sync_type']} @ {slot_id}")
+                    else:
+                        print(f"[Sync] 自动更新触发失败: {result.get('error', '未知错误')}")
+        except Exception as e:
+            print(f"[Sync] 自动更新调度异常: {e}")
+
+        time.sleep(20)
 
 class SyncHandler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
@@ -497,181 +756,7 @@ class SyncHandler(BaseHTTPRequestHandler):
 
     def handle_sync_start(self, sync_type: str = 'full'):
         """开始同步（支持 full/data/vectors 三种语义）"""
-        global is_syncing, stop_requested
-
-        try:
-            from auto_sync import acquire_lock_with_fd as acquire_process_lock, release_lock as release_process_lock
-        except Exception as e:
-            self._send_json({
-                'success': False,
-                'error': f'无法加载同步锁模块: {e}'
-            })
-            return
-
-        with sync_lock:
-            if is_syncing:
-                snapshot = dict(_sync_progress)
-                self._send_json({
-                    'success': False,
-                    'error': '同步正在进行中',
-                    'data': snapshot
-                })
-                return
-
-        if not acquire_process_lock():
-            self._send_json({
-                'success': False,
-                'error': '已有其他进程在执行同步任务'
-            })
-            return
-
-        with sync_lock:
-            is_syncing = True
-            stop_requested = False
-
-        # 重置进度
-        reset_sync_progress()
-        update_sync_progress('preparing', 0, 100, f'准备执行 {sync_type} 同步...')
-
-        # 在后台线程执行同步
-        def run_sync_with_progress():
-            global is_syncing, stop_requested
-            start_time = datetime.now(timezone.utc)
-            status = 'success'
-            message = ''
-            total_records = 0
-            data_lake = None
-
-            try:
-                sys.path.insert(0, os.path.dirname(__file__))
-                from udid_sync import sync_incremental, DB_PATH as SYNC_DB_PATH
-                from udid_hybrid_system import LocalDataLake
-                from auto_sync import run_vector_sync_batch, run_vector_sync_quick
-
-                data_lake = LocalDataLake(db_path=SYNC_DB_PATH)
-
-                def progress_callback(progress_info):
-                    if _is_stop_requested():
-                        raise RuntimeError('同步已被用户停止')
-                    update_sync_progress(
-                        stage=progress_info.get('stage', 'processing'),
-                        current=progress_info.get('current', 0),
-                        total=progress_info.get('total', 100),
-                        message=progress_info.get('message', '处理中...')
-                    )
-
-                if sync_type in ('full', 'data'):
-                    update_sync_progress('checking', 5, 100, '检查增量更新...')
-                    data_result = sync_incremental(data_lake, progress_callback=progress_callback)
-                    if not data_result.get('success'):
-                        status = 'failed'
-                        message = data_result.get('message', '数据同步失败')
-                        raise RuntimeError(message)
-                    total_records += data_result.get('total_records', 0)
-                    message = data_result.get('message', '')
-
-                if _is_stop_requested():
-                    raise RuntimeError('同步已被用户停止')
-
-                if sync_type in ('full', 'vectors'):
-                    update_sync_progress('vectors', 75, 100, '开始生成向量...')
-                    conn = db_connect(SYNC_DB_PATH)
-                    try:
-                        cursor = conn.cursor()
-                        cursor.execute("SELECT COUNT(*) FROM embedding_update_queue WHERE status = 'pending'")
-                        pending_count = cursor.fetchone()[0]
-                        if pending_count > 0:
-                            if _is_stop_requested():
-                                raise RuntimeError('同步已被用户停止')
-                            if pending_count <= 1000:
-                                vector_result = run_vector_sync_quick(conn, batch_size=pending_count)
-                            else:
-                                vector_result = run_vector_sync_batch(
-                                    conn,
-                                    max_records=min(pending_count, 50000),
-                                    should_stop=_is_stop_requested
-                                )
-                            if vector_result.get('stopped') or vector_result.get('error') == 'STOP_REQUESTED':
-                                raise RuntimeError('同步已被用户停止')
-                            if not vector_result.get('success'):
-                                status = 'failed'
-                                message = vector_result.get('error', '向量同步失败')
-                                raise RuntimeError(message)
-                            message = f"向量处理完成，成功 {vector_result.get('processed', 0)} 条"
-                        else:
-                            message = '无待处理向量'
-                    finally:
-                        conn.close()
-
-                if _is_stop_requested():
-                    status = 'stopped'
-                    message = '同步已停止'
-                    update_sync_progress('stopped', 0, 100, message)
-                else:
-                    status = 'success'
-                    update_sync_progress('completed', 100, 100, message or '同步完成')
-
-            except Exception as e:
-                elapsed = int((datetime.now(timezone.utc) - start_time).total_seconds())
-                error_msg = str(e)
-                if '已被用户停止' in error_msg:
-                    status = 'stopped'
-                    message = '同步已停止'
-                    update_sync_progress('stopped', 0, 100, message)
-                else:
-                    status = 'failed'
-                    message = error_msg
-                    print(f"[Sync] 同步失败: {error_msg}")
-                    update_sync_progress('failed', 0, 100, f'同步失败: {error_msg}')
-            finally:
-                elapsed = int((datetime.now(timezone.utc) - start_time).total_seconds())
-                save_sync_history(
-                    sync_type=sync_type,
-                    records_count=total_records,
-                    status=status,
-                    message=message,
-                    duration_seconds=elapsed
-                )
-                with sync_lock:
-                    is_syncing = False
-                    stop_requested = False
-                    _sync_progress['is_running'] = False
-                try:
-                    if data_lake is not None:
-                        data_lake.release_thread_connection()
-                except Exception as release_err:
-                    print(f"[Sync] 释放线程数据库连接失败: {release_err}")
-                try:
-                    release_process_lock()
-                except Exception as lock_err:
-                    print(f"[Sync] 释放进程锁失败: {lock_err}")
-
-        thread = threading.Thread(target=run_sync_with_progress)
-        thread.daemon = True
-        try:
-            thread.start()
-        except Exception as e:
-            with sync_lock:
-                is_syncing = False
-                stop_requested = False
-                _sync_progress['is_running'] = False
-            try:
-                release_process_lock()
-            except Exception:
-                pass
-            self._send_json({
-                'success': False,
-                'error': f'启动后台同步线程失败: {e}'
-            })
-            return
-
-        with sync_lock:
-            snapshot = {**_sync_progress, 'sync_type': sync_type}
-        self._send_json({
-            'success': True,
-            'message': f'{sync_type} 同步已启动',
-            'data': snapshot
-        })
+        self._send_json(_start_sync_task(sync_type, trigger_source='manual'))
 
     def handle_sync_stop(self):
         """停止同步请求"""
@@ -693,6 +778,10 @@ class SyncHandler(BaseHTTPRequestHandler):
         })
 
 def main():
+    scheduler = threading.Thread(target=_auto_sync_scheduler_loop, name='auto-sync-scheduler')
+    scheduler.daemon = True
+    scheduler.start()
+
     server = HTTPServer(('0.0.0.0', PORT), SyncHandler)
     print(f"=" * 60)
     print(f"UDID 同步监控服务器启动")

@@ -32,6 +32,12 @@ from werkzeug.security import generate_password_hash, check_password_hash
 # 导入本地数据湖模块
 from udid_hybrid_system import LocalDataLake
 from db_backend import is_postgres_backend
+from sync_schedule import (
+    AUTO_SYNC_PUBLIC_KEYS,
+    compute_next_run_iso,
+    format_schedule_summary,
+    normalize_auto_sync_settings,
+)
 
 # ==========================================
 # Flask 应用初始化
@@ -2598,6 +2604,31 @@ def _sanitize_config_for_response(config: Dict) -> Dict:
         }
     }
 
+
+def _serialize_auto_sync_config(config: Dict) -> Dict:
+    normalized = normalize_auto_sync_settings(config)
+    return {
+        **normalized,
+        "next_run_at": compute_next_run_iso(normalized),
+        "summary": format_schedule_summary(normalized),
+    }
+
+
+def _get_auto_sync_config() -> Dict:
+    raw = {key: _get_db_config(key, '') for key in AUTO_SYNC_PUBLIC_KEYS}
+    return _serialize_auto_sync_config(raw)
+
+
+def _save_auto_sync_config(body: Dict) -> Dict:
+    normalized = normalize_auto_sync_settings(body)
+    _set_db_config('auto_sync_enabled', '1' if normalized['auto_sync_enabled'] else '0')
+    _set_db_config('auto_sync_schedule', normalized['auto_sync_schedule'])
+    _set_db_config('auto_sync_time', normalized['auto_sync_time'])
+    _set_db_config('auto_sync_weekday', str(normalized['auto_sync_weekday']))
+    _set_db_config('auto_sync_type', normalized['auto_sync_type'])
+    _set_db_config('auto_sync_last_slot', '')
+    return _serialize_auto_sync_config(normalized)
+
 @app.route('/api/config', methods=['GET'])
 def get_config():
     """获取 API 配置"""
@@ -2657,6 +2688,41 @@ def save_config():
             }
         })
         
+    except Exception as e:
+        return _internal_error("接口处理失败", e)
+
+
+@app.route('/api/auto-sync/settings', methods=['GET'])
+def get_auto_sync_settings():
+    auth_error = _require_admin()
+    if auth_error:
+        return auth_error
+    try:
+        return jsonify({
+            "success": True,
+            "data": _get_auto_sync_config()
+        })
+    except Exception as e:
+        return _internal_error("接口处理失败", e)
+
+
+@app.route('/api/auto-sync/settings', methods=['POST'])
+def save_auto_sync_settings():
+    auth_error = _require_admin()
+    if auth_error:
+        return auth_error
+    try:
+        body = request.get_json() or {}
+        if not isinstance(body, dict):
+            return jsonify({"success": False, "error": "请求体必须是 JSON 对象"}), 400
+
+        saved = _save_auto_sync_config(body)
+        _log_auth_action(session.get('user_id'), "update_auto_sync_settings")
+        return jsonify({
+            "success": True,
+            "message": "自动更新设置已保存",
+            "data": saved
+        })
     except Exception as e:
         return _internal_error("接口处理失败", e)
 

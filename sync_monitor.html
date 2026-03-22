@@ -363,7 +363,7 @@
 
             <div class="cron-info">
                 <h3>📅 定时任务配置建议</h3>
-                <p>添加以下 cron 任务实现自动同步：</p>
+                <p>现在推荐优先在管理后台的“智能设置”里配置自动更新时间。下面的 cron 命令可作为备用方案：</p>
                 <code># 每天凌晨 2:00 自动同步<br>0 2 * * * cd /path/to/project && python auto_sync.py >> logs/sync.log 2>&1</code>
                 <p>或者每周一凌晨 3:00：</p>
                 <code># 每周一凌晨 3:00 自动同步<br>0 3 * * 1 cd /path/to/project && python auto_sync.py >> logs/sync.log 2>&1</code>
