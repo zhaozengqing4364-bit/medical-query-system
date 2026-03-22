@@ -45,6 +45,9 @@ CREATE TABLE products (
 CREATE INDEX idx_products_search ON products USING GIN (search_vector);
 CREATE INDEX idx_products_name ON products USING GIN (product_name gin_trgm_ops);
 CREATE INDEX idx_products_manufacturer ON products USING GIN (manufacturer gin_trgm_ops);
+CREATE INDEX idx_products_model_trgm ON products USING GIN (model gin_trgm_ops);
+CREATE INDEX idx_products_commercial_name_trgm ON products USING GIN (commercial_name gin_trgm_ops);
+CREATE INDEX idx_products_cert_no_trgm ON products USING GIN (cert_no gin_trgm_ops);
 CREATE INDEX idx_products_category ON products(category_code);
 CREATE INDEX idx_products_publish_date ON products(publish_date);
 CREATE INDEX idx_products_last_updated ON products(last_updated);

@@ -28,3 +28,4 @@ Thumbs.db
 config.json
 *.key
 *.pem
+.gstack/

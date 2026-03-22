@@ -22,6 +22,10 @@ import requests
 from config_utils import load_env_file_once, merge_config_sources
 from retry_utils import retry_with_backoff
 from db_backend import connect as db_connect, is_postgres_backend
+from search_query_utils import (
+    build_keyword_or_clause as shared_build_keyword_or_clause,
+    build_postgres_keywords_clause,
+)
 
 # 配置
 BASE_DIR = os.path.dirname(__file__)
@@ -278,19 +282,7 @@ def _like_op() -> str:
 
 
 def _build_keyword_or_clause(alias: str, keywords: List[str], columns: List[str], like_op: str) -> Tuple[str, List[str]]:
-    clauses: List[str] = []
-    params: List[str] = []
-    for raw_kw in keywords:
-        kw = (raw_kw or '').strip()
-        if not kw:
-            continue
-        pattern = f"%{kw}%"
-        field_clauses = []
-        for col in columns:
-            field_clauses.append(f"{alias}.{col} {like_op} ?")
-            params.append(pattern)
-        clauses.append(f"({' OR '.join(field_clauses)})")
-    return (" OR ".join(clauses) if clauses else "1=1", params)
+    return shared_build_keyword_or_clause(alias, keywords, columns, like_op)
 
 # ==========================================
 # 批量生成向量
@@ -528,11 +520,11 @@ def vector_search(query: str, conn: sqlite3.Connection = None,
     candidates = []
 
     if is_postgres_backend():
-        keyword_sql, keyword_params = _build_keyword_or_clause(
+        keyword_sql, keyword_params, _keyword_strategies = build_postgres_keywords_clause(
+            cursor=cursor,
             alias='p',
             keywords=keywords[:15],
-            columns=['product_name', 'commercial_name', 'model', 'manufacturer', 'description', 'scope', 'cert_no'],
-            like_op=like_op
+            like_op=like_op,
         )
         recall_sql = f'''
             SELECT p.di_code, p.product_name, p.commercial_name, p.model,
@@ -808,7 +800,8 @@ def hybrid_search(query: str, conn: sqlite3.Connection = None,
                   specs: str = None,
                   force_vector_recall: bool = False,
                   return_keywords: bool = True,
-                  min_score: int = 0) -> List[Dict]:
+                  min_score: int = 0,
+                  return_metadata: bool = False) -> List[Dict]:
     """
     三阶段语义检索：
     1. 产品名称过滤（硬性条件）
@@ -1130,8 +1123,19 @@ def hybrid_search(query: str, conn: sqlite3.Connection = None,
                 item['rank'] = i + 1
                 item['final_score'] = 0.5
             
-            return results[:top_k]
+            final_results = results[:top_k]
+            if return_metadata:
+                return {
+                    'results': final_results,
+                    'recall_method': 'name_only',
+                }
+            return final_results
         else:
+            if return_metadata:
+                return {
+                    'results': [],
+                    'recall_method': 'name_only',
+                }
             return []
     
     # 有参数需求，进行向量检索
@@ -1538,6 +1542,11 @@ def hybrid_search(query: str, conn: sqlite3.Connection = None,
             'highlightKeywords': list(query_keywords) if query_keywords else []  # 用于前端高亮，转换为list确保JSON可序列化
         })
 
+    if return_metadata:
+        return {
+            'results': results,
+            'recall_method': recall_method,
+        }
     return results
 
 # ==========================================

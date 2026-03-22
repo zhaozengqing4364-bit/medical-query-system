@@ -86,6 +86,25 @@ class LocalDataLake:
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_manufacturer ON products(manufacturer)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_category_code ON products(category_code)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_last_updated ON products(last_updated)')
+        if self._is_postgres:
+            cursor.execute("ALTER TABLE products ADD COLUMN IF NOT EXISTS search_vector tsvector")
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_products_search ON products USING GIN (search_vector)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_products_publish_date ON products(publish_date)')
+            try:
+                cursor.execute("SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm'")
+                has_pg_trgm = cursor.fetchone() is not None
+            except Exception as e:
+                has_pg_trgm = False
+                print(f"[DB] 检查 pg_trgm 扩展失败: {e}")
+
+            if has_pg_trgm:
+                cursor.execute('CREATE INDEX IF NOT EXISTS idx_products_name ON products USING GIN (product_name gin_trgm_ops)')
+                cursor.execute('CREATE INDEX IF NOT EXISTS idx_products_manufacturer ON products USING GIN (manufacturer gin_trgm_ops)')
+                cursor.execute('CREATE INDEX IF NOT EXISTS idx_products_model_trgm ON products USING GIN (model gin_trgm_ops)')
+                cursor.execute('CREATE INDEX IF NOT EXISTS idx_products_commercial_name_trgm ON products USING GIN (commercial_name gin_trgm_ops)')
+                cursor.execute('CREATE INDEX IF NOT EXISTS idx_products_cert_no_trgm ON products USING GIN (cert_no gin_trgm_ops)')
+            else:
+                print("[DB] pg_trgm 未安装，跳过 PostgreSQL trigram 索引创建")
         
         # 创建同步记录表
         cursor.execute('''

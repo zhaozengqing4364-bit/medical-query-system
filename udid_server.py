@@ -33,6 +33,12 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from udid_hybrid_system import LocalDataLake
 from db_backend import is_postgres_backend
 from config_utils import load_env_file_once
+from search_query_utils import (
+    build_keyword_or_clause as shared_build_keyword_or_clause,
+    build_postgres_keyword_clause,
+    build_postgres_keywords_clause,
+    collect_highlight_keywords,
+)
 from sync_schedule import (
     AUTO_SYNC_PUBLIC_KEYS,
     compute_next_run_iso,
@@ -165,23 +171,7 @@ def _like_op() -> str:
 
 
 def _build_keyword_or_clause(alias: str, keywords: list, columns: list, like_op: str) -> tuple:
-    """
-    生成关键词 OR 召回条件，返回 (sql, params)。
-    每个关键词会在多个字段上做模糊匹配，关键词之间 OR。
-    """
-    clauses = []
-    params = []
-    for raw_kw in keywords:
-        kw = (raw_kw or '').strip()
-        if not kw:
-            continue
-        pattern = f"%{kw}%"
-        field_clauses = []
-        for col in columns:
-            field_clauses.append(f"{alias}.{col} {like_op} ?")
-            params.append(pattern)
-        clauses.append(f"({' OR '.join(field_clauses)})")
-    return (" OR ".join(clauses) if clauses else "1=1", params)
+    return shared_build_keyword_or_clause(alias, keywords, columns, like_op)
 
 
 def _internal_error(log_message: str, error: Exception):
@@ -805,6 +795,13 @@ def search():
         # 构建查询
         like_op = _like_op()
         cursor = data_lake.conn.cursor()
+        highlight_keywords = collect_highlight_keywords([
+            keyword,
+            manufacturer,
+            model,
+            commercial_name,
+            cert_no,
+        ])
 
         # PostgreSQL 走统一 ILIKE 分支；SQLite 保留 FTS5 快速路径用于回滚。
         has_fts = False
@@ -896,7 +893,7 @@ def search():
                     LIMIT ?
                 )
                 SELECT p.di_code, p.product_name, p.commercial_name, p.model, p.manufacturer, 
-                       p.description, p.publish_date, p.source, p.last_updated, p.category_code
+                       p.description, p.publish_date, p.source, p.last_updated, p.category_code, p.scope
                 FROM ranked_hits h
                 INNER JOIN products p ON p.rowid = h.rowid
                 WHERE {where_sql}
@@ -917,11 +914,21 @@ def search():
             params = []
             
             if keyword:
-                conditions.append(
-                    f"(product_name {like_op} ? OR manufacturer {like_op} ? OR model {like_op} ? OR description {like_op} ?)"
-                )
-                keyword_pattern = f"%{keyword}%"
-                params.extend([keyword_pattern] * 4)
+                if is_postgres_backend():
+                    keyword_sql, keyword_params, _keyword_strategy = build_postgres_keyword_clause(
+                        cursor=cursor,
+                        alias='',
+                        keyword=keyword,
+                        like_op=like_op,
+                    )
+                    conditions.append(f"({keyword_sql})")
+                    params.extend(keyword_params)
+                else:
+                    conditions.append(
+                        f"(product_name {like_op} ? OR manufacturer {like_op} ? OR model {like_op} ? OR description {like_op} ?)"
+                    )
+                    keyword_pattern = f"%{keyword}%"
+                    params.extend([keyword_pattern] * 4)
             
             if status:
                 conditions.append("status = ?")
@@ -981,7 +988,7 @@ def search():
             offset = (page - 1) * page_size
             query_sql = f"""
                 SELECT di_code, product_name, commercial_name, model, manufacturer, 
-                       description, publish_date, source, last_updated, category_code
+                       description, publish_date, source, last_updated, category_code, scope
                 FROM products 
                 WHERE {where_clause}
                 ORDER BY last_updated DESC
@@ -992,8 +999,11 @@ def search():
         
         # 转换为字典列表
         columns = ['di_code', 'product_name', 'commercial_name', 'model', 'manufacturer',
-                   'description', 'publish_date', 'source', 'last_updated', 'category_code']
+                   'description', 'publish_date', 'source', 'last_updated', 'category_code', 'scope']
         data = [dict(zip(columns, row)) for row in rows]
+        if highlight_keywords:
+            for item in data:
+                item['highlightKeywords'] = highlight_keywords
         
         return jsonify({
             "success": True,
@@ -1453,6 +1463,7 @@ def ai_match():
         date_from = (filters.get('date_from') or '').strip()
         date_to = (filters.get('date_to') or '').strip()
         like_op = _like_op()
+        highlight_keywords = collect_highlight_keywords([keyword, product_name, specs, requirement])
 
         candidates = []
         recall_method = "vector"
@@ -1478,19 +1489,23 @@ def ai_match():
                 }
                 vector_filters = {k: v for k, v in vector_filters.items() if v}
 
-                vector_results = hybrid_search(
+                vector_payload = hybrid_search(
                     query=requirement,  # 参数需求（用于向量排序）
                     conn=data_lake.conn,
                     top_k=recall_k,
                     filters=vector_filters if vector_filters else None,
                     product_name=product_name,  # 产品名称（用于过滤）
                     specs=specs,  # 规格型号（用于加权）
-                    min_score=min_score  # 最低匹配分
+                    min_score=min_score,  # 最低匹配分
+                    return_metadata=True,
                 )
 
+                vector_results = vector_payload.get('results') if isinstance(vector_payload, dict) else vector_payload
+                vector_method = vector_payload.get('recall_method') if isinstance(vector_payload, dict) else None
                 if vector_results:
                     candidates = vector_results
-                    print(f"[AiMatch] 两阶段检索召回 {len(candidates)} 个候选")
+                    recall_method = vector_method or "vector"
+                    print(f"[AiMatch] 两阶段检索召回 {len(candidates)} 个候选，method={recall_method}")
             except ImportError:
                 print("[AiMatch] 向量服务未安装，使用 FTS 召回")
             except Exception as e:
@@ -1532,14 +1547,25 @@ def ai_match():
 
             fts_query = " OR ".join([f'"{k}"' for k in safe_keywords])
 
+            cursor = data_lake.conn.cursor()
             sql_conditions = []
             params = []
             if keyword:
-                sql_conditions.append(
-                    f"(p.product_name {like_op} ? OR p.manufacturer {like_op} ? OR p.model {like_op} ? OR p.description {like_op} ?)"
-                )
-                keyword_pattern = f"%{keyword}%"
-                params.extend([keyword_pattern] * 4)
+                if is_postgres_backend():
+                    filter_keyword_sql, filter_keyword_params, _filter_keyword_strategy = build_postgres_keyword_clause(
+                        cursor=cursor,
+                        alias='p',
+                        keyword=keyword,
+                        like_op=like_op,
+                    )
+                    sql_conditions.append(f"({filter_keyword_sql})")
+                    params.extend(filter_keyword_params)
+                else:
+                    sql_conditions.append(
+                        f"(p.product_name {like_op} ? OR p.manufacturer {like_op} ? OR p.model {like_op} ? OR p.description {like_op} ?)"
+                    )
+                    keyword_pattern = f"%{keyword}%"
+                    params.extend([keyword_pattern] * 4)
             if status:
                 sql_conditions.append("p.status = ?")
                 params.append(status)
@@ -1568,14 +1594,14 @@ def ai_match():
                 sql_conditions.append("p.publish_date <= ?")
                 params.append(date_to)
             where_clause = " AND ".join(sql_conditions) if sql_conditions else "1=1"
-            cursor = data_lake.conn.cursor()
+            highlight_keywords = collect_highlight_keywords(safe_keywords + [keyword, product_name, specs])
 
             if is_postgres_backend():
-                keyword_sql, keyword_params = _build_keyword_or_clause(
+                keyword_sql, keyword_params, _keyword_strategies = build_postgres_keywords_clause(
+                    cursor=cursor,
                     alias='p',
                     keywords=safe_keywords,
-                    columns=['product_name', 'commercial_name', 'model', 'manufacturer', 'description', 'cert_no', 'scope'],
-                    like_op=like_op
+                    like_op=like_op,
                 )
                 query_sql = f"""
                     SELECT p.di_code, p.product_name, p.commercial_name, p.model, p.manufacturer,
@@ -1626,12 +1652,14 @@ def ai_match():
                 "error": "没有符合筛选条件的候选产品"
             }), 400
 
-        # FTS 结果需要补充 matchScore
+        # FTS / 混合回退结果需要补充统一字段
         if recall_method != "vector":
             for i, item in enumerate(candidates):
                 if 'matchScore' not in item:
                     # 基于排名的分数：第1名=85，第50名=55
                     item['matchScore'] = max(55, 85 - i)
+                if 'highlightKeywords' not in item and highlight_keywords:
+                    item['highlightKeywords'] = highlight_keywords
 
         # 最低分过滤（向量结果通常已在 hybrid_search 内过滤，这里做兜底）
         if min_score > 0:
