@@ -32,12 +32,15 @@ from werkzeug.security import generate_password_hash, check_password_hash
 # 导入本地数据湖模块
 from udid_hybrid_system import LocalDataLake
 from db_backend import is_postgres_backend
+from config_utils import load_env_file_once
 from sync_schedule import (
     AUTO_SYNC_PUBLIC_KEYS,
     compute_next_run_iso,
     format_schedule_summary,
     normalize_auto_sync_settings,
 )
+
+load_env_file_once(os.path.dirname(__file__), log_prefix='[Config]')
 
 # ==========================================
 # Flask 应用初始化
